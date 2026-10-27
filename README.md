@@ -285,6 +285,23 @@ Workflow & Validation Rules:
 6. **Atomic Allocation:** Executes inside a MongoDB transaction session, creating the `Booking` document and all required `ResourceSlot` records. The unique compound index on `ResourceSlot (resourceId, slotStartAt)` guarantees that concurrent race conditions are rejected at the database level (`BOOKING_CONFLICT`), rolling back the transaction with zero orphaned records.
 7. **Sanitized Response:** Returns HTTP `201 Created` with sanitized booking details, resource summary, and allocated slot records.
 
+### 10. Booking Management Workflows (Prompt 10)
+
+Provides complete reservation lifecycle management for authenticated users:
+
+Endpoints:
+- `GET /api/v1/bookings/my` — Paginated user booking history with status, resource ID, and date range filters.
+- `GET /api/v1/bookings/:bookingId` — Individual booking inspection with ownership enforcement (404 on unowned to prevent enumeration).
+- `PATCH /api/v1/bookings/:bookingId/cancel` — Cancels a confirmed future reservation and atomically releases its active slot allocations.
+- `PATCH /api/v1/bookings/:bookingId/reschedule` — Reschedules a confirmed future reservation to an aligned new interval with atomic reallocation.
+
+Key Lifecycle Invariants:
+1. **Ownership Enforcement:** All actions require authentication; booking ownership is verified against `req.userId`. Attempting to access or mutate another user's booking returns `404 Not Found` (`BOOKING_NOT_FOUND`).
+2. **Cancellation Policy:** Only `confirmed` future bookings (`startAt > Date.now()`) can be cancelled. Completed bookings or bookings that have already started reject cancellation (`BOOKING_ALREADY_STARTED`, `INVALID_BOOKING_TRANSITION`). Already cancelled bookings reject duplicate cancellation (`BOOKING_ALREADY_CANCELLED`).
+3. **Atomic Slot Release:** Cancelling updates the `Booking` status to `cancelled`, stamps `cancelledAt` and `cancellationReason`, and deletes active `ResourceSlot` records within a single transaction, immediately restoring calendar availability while preserving historical records.
+4. **Rescheduling Reallocation:** Rechecks operating hours, slot alignment, maintenance blackouts, and concurrent booking conflicts while accounting for the booking's own allocations. Deletes old slots and inserts new slots atomically. If reallocation fails, the entire transaction is rolled back, leaving the original booking and original slots completely untouched.
+5. **Same-Time Rescheduling:** Reschedule requests with start and end timestamps identical to the existing reservation return `200 OK` idempotently without releasing or reallocating slots.
+
 ---
 
 ## Client Setup and Development
@@ -309,7 +326,7 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–9 (Full-Stack Foundation, Auth, Resources, Availability & Concurrency-Safe Booking Creation Complete)
+### Implemented in Prompts 1–10 (Full-Stack Foundation, Auth, Resources, Availability & Concurrency-Safe Booking Lifecycle Complete)
 - **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client configured with `credentials: 'include'`.
 - **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, cookie parsing (`cookie-parser`), body parsing, request logging, and configurable CORS origin policy.
 - **Database Management:** Robust MongoDB connection management (`connectDatabase`, `disconnectDatabase`, `getDatabaseState`) with URI credential masking, connection lifecycle event logging, and concurrent connection memoization.
@@ -323,8 +340,9 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **Availability Engine:** `GET /api/v1/resources/:resourceId/availability` computing aligned candidate slots from operating hours, applying half-open interval overlap rules, excluding past slots, maintenance blackouts (`MaintenanceBlock.js`), and existing reservations (`Booking.js`, `ResourceSlot.js`).
 - **Concurrency-Safe Slot Allocation Primitives:** `Booking` & `ResourceSlot` models with unique compound index `{ resourceId: 1, slotStartAt: 1 }`. Service primitives for slot alignment validation, atomic multi-slot allocation transactions, safe conflict translation (`BOOKING_CONFLICT`), and deployment prerequisite validation (`TRANSACTIONS_UNAVAILABLE`).
 - **Authenticated Booking Creation Workflow:** `POST /api/v1/bookings` protected by `authenticate` middleware. Rigorous validation of ISO 8601 instant timestamps, future time, 90-day booking window, and mass assignment rejection. Multi-document transactional allocation creating `Booking` and `ResourceSlot` records atomically, with database-level uniqueness enforcement `{ resourceId: 1, slotStartAt: 1 }` raising `409 Conflict` (`BOOKING_CONFLICT`), and safe failure on standalone topologies (`TRANSACTIONS_UNAVAILABLE`).
+- **Booking Management Lifecycle:** User booking history (`GET /api/v1/bookings/my`), detail view (`GET /api/v1/bookings/:bookingId`), atomic cancellation (`PATCH /api/v1/bookings/:bookingId/cancel`), and atomic rescheduling (`PATCH /api/v1/bookings/:bookingId/reschedule`). Enforces ownership, policy checks (future confirmed only), slot release/reallocation atomicity, and idempotent same-time rescheduling.
 - **Diagnostic Health Endpoint:** Live `GET /api/v1/health` distinguishing process liveness from database readiness.
 
 ### Planned for Future Prompts
-- **Prompt 10:** User reservation history (`GET /api/v1/bookings/my`), detail inspection (`GET /api/v1/bookings/:id`), booking cancellation with slot release, and rescheduling workflow.
-- **Prompt 11+:** Administrator maintenance blackout periods, inventory analytics, and audit logs.
+- **Prompt 11:** Administrator maintenance blackout periods, inventory analytics, and audit logs.
+- **Prompt 12+:** Frontend reservation interfaces, booking management screens, and administrative dashboards.

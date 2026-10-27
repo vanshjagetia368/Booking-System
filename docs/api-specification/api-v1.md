@@ -825,6 +825,252 @@ Creates a new reservation for an active resource with transaction-safe, atomic f
 
 ---
 
+## Booking Management Workflows (Prompt 10)
+
+### 1. Retrieve User Booking History
+
+`GET /api/v1/bookings/my`
+
+Retrieves a paginated list of reservations owned by the currently authenticated user.
+
+- **Access:** Authenticated (`authenticate` middleware required).
+- **Ownership Enforcement:** Derived strictly from `req.userId`. Users cannot query other users' bookings.
+- **Sorting:** Deterministic newest-first sort on `{ startAt: -1, createdAt: -1 }`.
+- **Query Parameters:**
+  - `page` (optional integer >= 1, default `1`)
+  - `limit` (optional integer 1..100, default `10`)
+  - `status` (optional string enum: `confirmed`, `cancelled`, `completed`)
+  - `resourceId` (optional 24-character hexadecimal ObjectId)
+  - `fromDate` (optional ISO 8601 date/timestamp string filter on `startAt >= fromDate`)
+  - `toDate` (optional ISO 8601 date/timestamp string filter on `startAt <= toDate`)
+- **Success Status:** `200 OK`
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "User bookings retrieved successfully.",
+  "data": {
+    "bookings": [
+      {
+        "id": "671e621bf66895768659da05",
+        "userId": "671e3b62f66895768659d9a0",
+        "resourceId": "671e482bf66895768659d9f1",
+        "resource": {
+          "id": "671e482bf66895768659d9f1",
+          "name": "Collaborative Study Suite A",
+          "category": "study-room",
+          "location": "Library Building 2, Room 204",
+          "capacity": 6,
+          "slotDurationMinutes": 30
+        },
+        "startAt": "2026-10-28T10:00:00.000Z",
+        "endAt": "2026-10-28T11:00:00.000Z",
+        "status": "confirmed",
+        "notes": "Machine learning study session",
+        "cancellationReason": null,
+        "cancelledAt": null,
+        "createdAt": "2026-10-27T12:00:00.000Z",
+        "updatedAt": "2026-10-27T12:00:00.000Z"
+      }
+    ]
+  },
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "totalItems": 1,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPrevPage": false
+  }
+}
+```
+
+---
+
+### 2. Retrieve Booking Details
+
+`GET /api/v1/bookings/:bookingId`
+
+Retrieves full reservation details for a specific booking owned by the caller.
+
+- **Access:** Authenticated (`authenticate` middleware required).
+- **Path Parameter:** `bookingId` (valid 24-character hexadecimal MongoDB ObjectId).
+- **Ownership Enforcement:** Returns `404 Not Found` (`BOOKING_NOT_FOUND`) if the booking does not exist OR if it is owned by another user, preventing booking existence enumeration.
+- **Success Status:** `200 OK`
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Booking details retrieved successfully.",
+  "data": {
+    "booking": {
+      "id": "671e621bf66895768659da05",
+      "userId": "671e3b62f66895768659d9a0",
+      "resourceId": "671e482bf66895768659d9f1",
+      "resource": {
+        "id": "671e482bf66895768659d9f1",
+        "name": "Collaborative Study Suite A",
+        "category": "study-room",
+        "location": "Library Building 2, Room 204",
+        "capacity": 6,
+        "slotDurationMinutes": 30,
+        "description": "Quiet collaborative room equipped with whiteboard and HDMI display."
+      },
+      "startAt": "2026-10-28T10:00:00.000Z",
+      "endAt": "2026-10-28T11:00:00.000Z",
+      "status": "confirmed",
+      "notes": "Machine learning study session",
+      "cancellationReason": null,
+      "cancelledAt": null,
+      "createdAt": "2026-10-27T12:00:00.000Z",
+      "updatedAt": "2026-10-27T12:00:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+### 3. Cancel Booking
+
+`PATCH /api/v1/bookings/:bookingId/cancel`
+
+Cancels an active confirmed reservation and atomically releases its occupied fixed-duration slots back to available inventory.
+
+- **Access:** Authenticated (`authenticate` middleware required).
+- **Path Parameter:** `bookingId` (valid 24-character hexadecimal MongoDB ObjectId).
+- **Request Body (optional):**
+```json
+{
+  "reason": "Class schedule conflict"
+}
+```
+- **Cancellation Policy:**
+  - Only the booking owner can cancel.
+  - Only bookings in `confirmed` status can be cancelled.
+  - Bookings that have already started or passed (`startAt <= Date.now()`) cannot be cancelled (`409 Conflict`, `BOOKING_ALREADY_STARTED`).
+  - Already cancelled bookings reject repeated cancellation (`409 Conflict`, `BOOKING_ALREADY_CANCELLED`).
+  - Completed bookings reject cancellation (`409 Conflict`, `INVALID_BOOKING_TRANSITION`).
+- **Atomic Deallocation:** The `Booking` record status transition to `cancelled` and the deletion of `ResourceSlot` records occur within a single MongoDB transaction.
+- **Audit Preservation:** The `Booking` document is never deleted; `cancelledAt` and `cancellationReason` are recorded.
+- **Success Status:** `200 OK`
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Booking cancelled successfully.",
+  "data": {
+    "booking": {
+      "id": "671e621bf66895768659da05",
+      "userId": "671e3b62f66895768659d9a0",
+      "resourceId": "671e482bf66895768659d9f1",
+      "resource": {
+        "id": "671e482bf66895768659d9f1",
+        "name": "Collaborative Study Suite A",
+        "category": "study-room",
+        "location": "Library Building 2, Room 204",
+        "capacity": 6,
+        "slotDurationMinutes": 30
+      },
+      "startAt": "2026-10-28T10:00:00.000Z",
+      "endAt": "2026-10-28T11:00:00.000Z",
+      "status": "cancelled",
+      "notes": "Machine learning study session",
+      "cancellationReason": "Class schedule conflict",
+      "cancelledAt": "2026-10-27T14:30:00.000Z",
+      "createdAt": "2026-10-27T12:00:00.000Z",
+      "updatedAt": "2026-10-27T14:30:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+### 4. Reschedule Booking
+
+`PATCH /api/v1/bookings/:bookingId/reschedule`
+
+Reschedules an active confirmed reservation to a new time interval with atomic reallocation of resource slots.
+
+- **Access:** Authenticated (`authenticate` middleware required).
+- **Path Parameter:** `bookingId` (valid 24-character hexadecimal MongoDB ObjectId).
+- **Request Body:**
+```json
+{
+  "startAt": "2026-10-28T14:00:00Z",
+  "endAt": "2026-10-28T15:00:00Z"
+}
+```
+- **Rescheduling Policy & Invariants:**
+  - Only the booking owner can reschedule.
+  - Only `confirmed` bookings can be rescheduled.
+  - Bookings that have already started cannot be rescheduled (`BOOKING_ALREADY_STARTED`).
+  - Target resource must remain `active`.
+  - New interval must be valid ISO 8601 instants, positive duration (`[startAt, endAt)`), strictly in the future, within the 90-day booking window, aligned to the resource's slot duration grid, and within operating hours.
+  - Same-Time Rescheduling: If the requested start and end timestamps match the current interval exactly, returns `200 OK` (`Booking schedule is unchanged.`) idempotently without releasing or reallocating slots.
+- **Atomic Reallocation Transaction:**
+  - Evaluates maintenance overlaps (`MAINTENANCE_CONFLICT`).
+  - Evaluates active booking overlaps, strictly excluding the current booking (`BOOKING_CONFLICT`).
+  - Releases old slots and inserts new slots atomically. If any concurrent conflict or failure occurs, the transaction is rolled back, leaving the original booking and original slot allocations completely intact.
+- **Success Status:** `200 OK`
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Booking rescheduled successfully.",
+  "data": {
+    "booking": {
+      "id": "671e621bf66895768659da05",
+      "userId": "671e3b62f66895768659d9a0",
+      "resourceId": "671e482bf66895768659d9f1",
+      "resource": {
+        "id": "671e482bf66895768659d9f1",
+        "name": "Collaborative Study Suite A",
+        "category": "study-room",
+        "location": "Library Building 2, Room 204",
+        "capacity": 6,
+        "slotDurationMinutes": 30
+      },
+      "startAt": "2026-10-28T14:00:00.000Z",
+      "endAt": "2026-10-28T15:00:00.000Z",
+      "status": "confirmed",
+      "notes": "Machine learning study session",
+      "cancellationReason": null,
+      "cancelledAt": null,
+      "createdAt": "2026-10-27T12:00:00.000Z",
+      "updatedAt": "2026-10-27T15:00:00.000Z"
+    },
+    "slots": [
+      {
+        "id": "671e621bf66895768659da10",
+        "resourceId": "671e482bf66895768659d9f1",
+        "slotStartAt": "2026-10-28T14:00:00.000Z",
+        "slotEndAt": "2026-10-28T14:30:00.000Z",
+        "bookingId": "671e621bf66895768659da05",
+        "createdAt": "2026-10-27T15:00:00.000Z",
+        "updatedAt": "2026-10-27T15:00:00.000Z"
+      },
+      {
+        "id": "671e621bf66895768659da11",
+        "resourceId": "671e482bf66895768659d9f1",
+        "slotStartAt": "2026-10-28T14:30:00.000Z",
+        "slotEndAt": "2026-10-28T15:00:00.000Z",
+        "bookingId": "671e621bf66895768659da05",
+        "createdAt": "2026-10-27T15:00:00.000Z",
+        "updatedAt": "2026-10-27T15:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## Planned API Groups (Upcoming Prompts)
 
 | Group | Namespace | Responsibilities | Target Prompt | Access |
@@ -835,18 +1081,13 @@ Creates a new reservation for an active resource with transaction-safe, atomic f
 | Availability | `/api/v1/resources/:resourceId/availability` | Query bookable slots on `[start, end)` intervals | **Implemented (Prompt 7)** | Public reads |
 | Allocation Primitives | *Internal Service* | Atomic slot allocation, unique index concurrency, transaction safety | **Implemented (Prompt 8)** | Server-side internal primitives |
 | Booking Creation | `/api/v1/bookings` | Authenticated reservation creation with atomic slot allocation | **Implemented (Prompt 9)** | Authenticated (ownership enforced) |
-| Booking Lifecycle | `/api/v1/bookings` | User booking history, detail inspection, cancellation, reschedule | Prompt 10 | Authenticated (ownership enforced) |
+| Booking Lifecycle | `/api/v1/bookings` | User booking history, detail inspection, cancellation, reschedule | **Implemented (Prompt 10)** | Authenticated (ownership enforced) |
 | Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 11 | Administrator |
 
 ---
 
 ## Concurrency and Transaction Requirements
 
-Reservation creation and rescheduling require multi-document consistency across `Bookings` and `ResourceSlots`. The application uses MongoDB transactions with Mongoose sessions.
+Reservation creation, cancellation, and rescheduling require multi-document consistency across `Bookings` and `ResourceSlots`. The application uses MongoDB transactions with Mongoose sessions.
 
 Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions and will return `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`).
-
-
-
-
-

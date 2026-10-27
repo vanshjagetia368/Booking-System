@@ -121,6 +121,8 @@ bookingSchema.methods.toSafeObject = function () {
     endAt: this.endAt,
     status: this.status,
     notes: this.notes,
+    cancellationReason: this.cancellationReason || null,
+    cancelledAt: this.cancelledAt || null,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };
