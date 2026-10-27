@@ -108,9 +108,9 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero__eyebrow">
           <Badge variant="primary" size="md">
-            Prompt 2 / 22 Foundation
+            Full-Stack Foundation Complete
           </Badge>
-          <span className="hero__stage-text">React 19 &bull; Vite &bull; React Router 7</span>
+          <span className="hero__stage-text">React 19 &bull; Vite 6 &bull; Express 5 &bull; MongoDB / Mongoose 8</span>
         </div>
 
         <h1 className="hero__title">
@@ -140,10 +140,11 @@ export default function HomePage() {
       <section className="home-alert-section">
         <Alert
           variant="info"
-          title="Frontend Foundation Active"
+          title="Full-Stack Foundation Active & Integrated"
         >
           The React client shell, centralized routing, semantic responsive layout,
-          UI primitive library, and standardized API client are established. Later prompts
+          UI primitive library, Express 5 backend architecture, MongoDB connection pooling,
+          and live /api/v1/health diagnostics are fully operational. Later prompts
           will progressively implement authentication, inventory discovery, schedule availability,
           and transactional booking flows.
         </Alert>

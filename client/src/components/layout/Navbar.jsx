@@ -55,7 +55,7 @@ export default function Navbar() {
           </span>
           <span className="navbar__title">Smart Resource Booking</span>
           <Badge variant="primary" size="sm" className="navbar__stage-badge">
-            Prompt 2 Shell
+            Full-Stack Foundation
           </Badge>
         </Link>
 

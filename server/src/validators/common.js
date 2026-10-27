@@ -33,6 +33,62 @@ export function isPositiveInteger(value) {
 }
 
 /**
+ * Validates pagination parameters: page >= 1, limit between 1 and 100.
+ *
+ * @param {object} query
+ * @param {unknown} [query.page]
+ * @param {unknown} [query.limit]
+ * @returns {{ isValid: boolean, page: number, limit: number, errors?: Record<string, string> }}
+ */
+export function validatePagination(query = {}) {
+  const errors = {};
+  let page = 1;
+  let limit = 20;
+
+  if (query.page !== undefined) {
+    const parsedPage = Number(query.page);
+    if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+      errors.page = 'Page must be an integer greater than or equal to 1.';
+    } else {
+      page = parsedPage;
+    }
+  }
+
+  if (query.limit !== undefined) {
+    const parsedLimit = Number(query.limit);
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      errors.limit = 'Limit must be an integer between 1 and 100.';
+    } else {
+      limit = parsedLimit;
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { isValid: false, page, limit, errors };
+  }
+
+  return { isValid: true, page, limit };
+}
+
+/**
+ * Validates that a string value belongs to an allowed set of enum values.
+ *
+ * @param {unknown} value
+ * @param {string[]} allowedValues
+ * @param {string} [fieldName='Field']
+ * @returns {{ isValid: boolean, error?: string }}
+ */
+export function validateEnum(value, allowedValues = [], fieldName = 'Field') {
+  if (typeof value !== 'string' || !allowedValues.includes(value)) {
+    return {
+      isValid: false,
+      error: `${fieldName} must be one of: ${allowedValues.join(', ')}.`,
+    };
+  }
+  return { isValid: true };
+}
+
+/**
  * Validates half-open booking intervals: [start, end)
  * Enforces start < end and valid dates.
  *
@@ -65,5 +121,7 @@ export default {
   isValidIsoDate,
   isNonEmptyString,
   isPositiveInteger,
+  validatePagination,
+  validateEnum,
   validateInterval,
 };

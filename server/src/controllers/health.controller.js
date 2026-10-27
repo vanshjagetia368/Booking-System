@@ -1,6 +1,6 @@
 import { getDatabaseState } from '../config/database.js';
 import { env } from '../config/env.js';
-import { sendSuccess } from '../utils/apiResponse.js';
+import { sendSuccess, sendError } from '../utils/apiResponse.js';
 
 /**
  * Health check endpoint controller.
@@ -27,14 +27,18 @@ export function getHealth(req, res) {
     },
   };
 
-  const statusCode = isHealthy ? 200 : 503;
-  const message = isHealthy
-    ? 'Smart Resource Booking API is operating normally.'
-    : 'Smart Resource Booking API is operational, but the database connection is not ready.';
+  if (isHealthy) {
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: 'Smart Resource Booking API is operating normally.',
+      data: responseData,
+    });
+  }
 
-  return res.status(statusCode).json({
-    success: isHealthy,
-    message,
+  return sendError(res, {
+    statusCode: 503,
+    message: 'Smart Resource Booking API is operational, but the database connection is not ready.',
+    code: 'DATABASE_UNAVAILABLE',
     data: responseData,
   });
 }

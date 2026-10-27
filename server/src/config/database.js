@@ -20,6 +20,7 @@ function maskDatabaseUri(uri) {
 }
 
 let isLifecycleConfigured = false;
+let connectionPromise = null;
 
 function configureConnectionLifecycle() {
   if (isLifecycleConfigured) return;
@@ -48,6 +49,9 @@ function configureConnectionLifecycle() {
 /**
  * Connects to MongoDB using Mongoose.
  *
+ * Reuses existing connections or in-flight connection promises to prevent
+ * duplicate connection attempts caused by multiple module imports.
+ *
  * Note on Transaction Requirements:
  * The future booking allocation engine relies on MongoDB transactions and unique
  * compound indexes on (resourceId, slotStartAt) to guarantee concurrency safety.
@@ -64,9 +68,14 @@ export async function connectDatabase(uri, options = {}) {
     throw new Error('[Database] Missing or invalid MongoDB connection URI.');
   }
 
-  // If already connected (readyState === 1), return existing connection
+  // 1. If already connected, return existing connection immediately
   if (mongoose.connection.readyState === 1) {
     return mongoose;
+  }
+
+  // 2. If a connection attempt is already in flight, reuse the active promise
+  if (connectionPromise) {
+    return connectionPromise;
   }
 
   configureConnectionLifecycle();
@@ -74,16 +83,22 @@ export async function connectDatabase(uri, options = {}) {
   const sanitizedUri = maskDatabaseUri(uri);
   console.log(`[Database] Connecting to MongoDB at ${sanitizedUri}...`);
 
-  try {
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-      ...options,
-    });
-    return mongoose;
-  } catch (error) {
-    console.error(`[Database] Failed to connect to MongoDB (${sanitizedUri}): ${error.message}`);
-    throw error;
-  }
+  connectionPromise = (async () => {
+    try {
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 5000,
+        ...options,
+      });
+      return mongoose;
+    } catch (error) {
+      console.error(`[Database] Failed to connect to MongoDB (${sanitizedUri}): ${error.message}`);
+      throw error;
+    } finally {
+      connectionPromise = null;
+    }
+  })();
+
+  return connectionPromise;
 }
 
 /**

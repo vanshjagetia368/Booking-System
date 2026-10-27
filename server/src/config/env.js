@@ -29,9 +29,10 @@ if (!mongodbUri) {
   mongodbUri = 'mongodb://127.0.0.1:27017/smart_resource_booking';
 }
 
-const clientUrl = process.env.CLIENT_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const rawClientUrl = process.env.CLIENT_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const clientUrl = rawClientUrl.trim().replace(/\/+$/, '');
 
-// Reserved for future authentication modules (Prompt 4+)
+// Reserved for future authentication modules (Prompt 5)
 const jwtSecret = process.env.JWT_SECRET || (nodeEnv === 'development' ? 'dev_jwt_secret_placeholder_not_for_production' : null);
 const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
 
@@ -45,8 +46,8 @@ export const env = Object.freeze({
   isTest: nodeEnv === 'test',
   port,
   mongodbUri,
-  clientUrl: clientUrl.trim(),
-  clientOrigin: clientUrl.trim(), // Alias for backward compatibility
+  clientUrl,
+  clientOrigin: clientUrl, // Alias for backward compatibility
   jwt: Object.freeze({
     secret: jwtSecret,
     expiresIn: jwtExpiresIn,

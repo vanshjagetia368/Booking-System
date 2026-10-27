@@ -10,7 +10,7 @@ import { sendError } from '../utils/apiResponse.js';
  * and ensures stack traces are never exposed in production.
  */
 export function errorHandler(err, req, res, next) {
-  let statusCode = err.statusCode || 500;
+  let statusCode = err.statusCode || err.status || 500;
   let message = err.message || 'An unexpected internal server error occurred.';
   let code = err.code || 'INTERNAL_ERROR';
   let details = err.details || null;
@@ -23,7 +23,13 @@ export function errorHandler(err, req, res, next) {
     details = null;
   }
 
-  // 2. Mongoose CastError (e.g. invalid ObjectId)
+  // 2. CORS origin rejection
+  if (err.message && err.message.startsWith('CORS error:')) {
+    statusCode = 403;
+    code = 'CORS_ORIGIN_FORBIDDEN';
+  }
+
+  // 3. Mongoose CastError (e.g. invalid ObjectId)
   if (err.name === 'CastError') {
     statusCode = 400;
     message = `Invalid value for parameter '${err.path}': '${err.value}'.`;
@@ -31,7 +37,7 @@ export function errorHandler(err, req, res, next) {
     details = null;
   }
 
-  // 3. Mongoose ValidationError
+  // 4. Mongoose ValidationError
   if (err.name === 'ValidationError' && err.errors) {
     statusCode = 422;
     message = 'Validation failed for one or more fields.';
@@ -42,7 +48,7 @@ export function errorHandler(err, req, res, next) {
     }, {});
   }
 
-  // 4. MongoDB Duplicate Key Conflict (Code 11000)
+  // 5. MongoDB Duplicate Key Conflict (Code 11000)
   if (err.code === 11000) {
     statusCode = 409;
     const duplicatedFields = Object.keys(err.keyPattern || err.keyValue || {});

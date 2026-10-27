@@ -3,6 +3,14 @@ import { env } from '../config/env.js';
 /**
  * Standardized success response sender.
  *
+ * Output format:
+ * {
+ *   "success": true,
+ *   "message": "...",
+ *   "data": { ... },
+ *   "meta": { ... }
+ * }
+ *
  * @param {import('express').Response} res
  * @param {object} options
  * @param {number} [options.statusCode=200]
@@ -24,11 +32,22 @@ export function sendSuccess(res, { statusCode = 200, message = 'Success', data =
 /**
  * Standardized error response sender.
  *
+ * Output format:
+ * {
+ *   "success": false,
+ *   "message": "...",
+ *   "code": "ERROR_CODE",
+ *   "data": { ... },
+ *   "details": { ... },
+ *   "stack": "..." (development only)
+ * }
+ *
  * @param {import('express').Response} res
  * @param {object} options
  * @param {number} [options.statusCode=500]
- * @param {string} [options.message='An error occurred']
+ * @param {string} [options.message='An unexpected error occurred']
  * @param {string} [options.code='INTERNAL_ERROR']
+ * @param {unknown} [options.data=null]
  * @param {unknown} [options.details=null]
  * @param {string} [options.stack=null]
  */
@@ -36,6 +55,7 @@ export function sendError(res, {
   statusCode = 500,
   message = 'An unexpected error occurred',
   code = 'INTERNAL_ERROR',
+  data = null,
   details = null,
   stack = null,
 } = {}) {
@@ -43,8 +63,9 @@ export function sendError(res, {
     success: false,
     message,
     code,
+    ...(data !== null && data !== undefined ? { data } : {}),
     ...(details !== null && details !== undefined ? { details } : {}),
-    // Only include stack trace in non-production environments
+    // Exclude stack trace in production environments
     ...(env.isDevelopment && stack ? { stack } : {}),
   };
 
