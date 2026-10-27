@@ -22,7 +22,7 @@ export default function Footer() {
               and reserve rooms, labs, and equipment with concurrency-safe booking logic.
             </p>
             <p className="footer__version-note">
-              Current Stage: <strong>Frontend Foundation (Prompt 2/22)</strong>
+              Current Stage: <strong>Frontend Foundation (Prompt 13/22)</strong>
             </p>
           </div>
 
@@ -37,7 +37,7 @@ export default function Footer() {
                 <Link to={ROUTES.RESOURCES} className="footer__link">Resource Directory</Link>
               </li>
               <li>
-                <Link to={ROUTES.MY_BOOKINGS} className="footer__link">My Reservations</Link>
+                <Link to={ROUTES.BOOKINGS} className="footer__link">My Reservations</Link>
               </li>
               <li>
                 <Link to={ROUTES.LOGIN} className="footer__link">Authentication</Link>
@@ -57,6 +57,9 @@ export default function Footer() {
               </li>
               <li>
                 <Link to={ROUTES.ADMIN_BOOKINGS} className="footer__link">Reservation Management</Link>
+              </li>
+              <li>
+                <Link to={ROUTES.ADMIN_MAINTENANCE} className="footer__link">Maintenance Schedule</Link>
               </li>
             </ul>
           </div>
