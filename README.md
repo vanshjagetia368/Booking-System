@@ -49,7 +49,7 @@ client/                     React frontend workspace
       admin/                Administrator management views (Prompt 8)
       auth/                 Authentication and session views (Prompt 5)
       availability/         Schedule and availability views (Prompt 6)
-      bookings/             Reservation workflows, history, filtering, pagination, and details (Prompt 17)
+      bookings/             Reservation workflows, history, cancellation, and rescheduling (Prompt 18)
       resources/            Home overview and resource catalog views (Prompts 2 & 6)
     hooks/                  Custom React hooks
     lib/                    Shared library wrappers and re-exports
@@ -370,7 +370,13 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–17 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, Role-Aware Navigation, Resource Discovery, Resource Details, Availability Calendar, Slot Selection, Booking Creation Workflow, Personal Booking History, and Booking Details)
+### Implemented in Prompts 1–18 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, Role-Aware Navigation, Resource Discovery, Resource Details, Availability Calendar, Slot Selection, Booking Creation Workflow, Personal Booking History, Booking Details, Cancellation, and Rescheduling Workflows)
+- **Booking Cancellation and Rescheduling Workflows (Prompt 18):**
+  - **Self-Service Cancellation Modal (`CancelBookingDialog.jsx`, `bookingService.js`):** Connects to `PATCH /api/v1/bookings/:bookingId/cancel` with optional reason field (max 500 characters). Features a synchronous submission lock (`useRef`), progress feedback, and policy warnings ("Cancelling immediately releases your reserved time slot").
+  - **Interactive Rescheduling Interface (`RescheduleBookingDialog.jsx`, `RescheduleAvailabilityPicker.jsx`, `bookingService.js`):** Queries real-time slot availability for candidate dates via `availabilityService.getAvailability()`. Enforces alignment with facility duration grids, highlights the existing slot, and atomically submits `{ startAt, endAt }` to `PATCH /api/v1/bookings/:bookingId/reschedule`.
+  - **Preservation on Failure:** If rescheduling fails or conflicts (`BOOKING_CONFLICT`, `MAINTENANCE_CONFLICT`, `OUTSIDE_OPERATING_HOURS`), the original booking remains untouched in the UI and database with clear actionable error messages.
+  - **Contextual Action Buttons & Feedback (`BookingActionButtons.jsx`, `BookingActionFeedback.jsx`, `bookingPolicyUtils.js`):** Enforces policy eligibility (`status === 'confirmed'` and `startAt > Date.now()`), displaying explanatory alerts for past, in-progress, or cancelled reservations.
+  - **Coordinated Refresh:** Refetches booking details and updates booking history lists upon successful cancellation or rescheduling, invalidating stale availability slots.
 - **Personal Booking History, Details, Status Indicators, Filtering, and Pagination (Prompt 17):**
   - **Authenticated Booking History (`MyBookingsPage.jsx`, `bookingService.js`):** Connects to `GET /api/v1/bookings/my` using strict query parameter sanitization whitelisting (`page`, `limit`, `status`, `resourceId`, `fromDate`, `toDate`) and full URL search param synchronization (`useSearchParams`).
   - **Status & Date Range Filtering (`BookingFilters.jsx`):** Segmented status tabs (`confirmed`, `completed`, `cancelled`), date pickers (`fromDate`, `toDate`), filter chips with one-click dismiss, and reset button that automatically resets pagination to page 1.
@@ -423,4 +429,4 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **API Specification & Architecture Documentation:** Comprehensive and synchronized documentation in `docs/` (`api-specification/api-v1.md`, `architecture/overview.md`, `database-design/data-model.md`, `requirements/project-requirements.md`).
 
 ### Planned for Future Prompts
-- **Prompt 18+:** React frontend feature implementation (Personal user booking self-service cancellation modal with atomic slot release, interactive rescheduling workflow, and Administrative operational dashboards).
+- **Prompt 19+:** React frontend feature implementation (Administrative resource catalog management, maintenance scheduling interface, system-wide booking inspection, and operational analytics dashboard).

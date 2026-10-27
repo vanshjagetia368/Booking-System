@@ -3,4 +3,5 @@ export { default as AvailabilityCalendar } from './components/AvailabilityCalend
 export { default as AvailabilityStatus } from './components/AvailabilityStatus.jsx';
 export { default as AvailabilitySlotList } from './components/AvailabilitySlotList.jsx';
 export { default as SlotSelectionSummary } from './components/SlotSelectionSummary.jsx';
+export { default as RescheduleAvailabilityPicker } from './components/RescheduleAvailabilityPicker.jsx';
 export * from './utils/availabilityUtils.js';

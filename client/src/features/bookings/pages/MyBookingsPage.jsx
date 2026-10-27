@@ -2,19 +2,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PageContainer from '../../../components/layout/PageContainer.jsx';
 import PageHeader from '../../../components/ui/PageHeader.jsx';
+import Alert from '../../../components/ui/Alert.jsx';
 import LoadingState from '../../../components/feedback/LoadingState.jsx';
 import ErrorState from '../../../components/feedback/ErrorState.jsx';
 import BookingFilters from '../components/BookingFilters.jsx';
 import BookingList from '../components/BookingList.jsx';
+import CancelBookingDialog from '../components/CancelBookingDialog.jsx';
+import RescheduleBookingDialog from '../components/RescheduleBookingDialog.jsx';
 import bookingService from '../services/bookingService.js';
 import { normalizeError } from '../../../utils/error.js';
+import { formatDate, formatTimeRange } from '../../../utils/date.js';
 
 /**
  * MyBookingsPage
  *
  * Authenticated user personal booking-management view.
  * Connects to GET /api/v1/bookings/my, synchronizes filter/pagination state with URL
- * search parameters, and provides status filtering, date range filtering, and pagination.
+ * search parameters, and provides status filtering, date range filtering, pagination,
+ * and direct cancellation and rescheduling dialog workflows.
  */
 export default function MyBookingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,6 +42,11 @@ export default function MyBookingsPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Dialog & Action Feedback states
+  const [bookingToCancel, setBookingToCancel] = useState(null);
+  const [bookingToReschedule, setBookingToReschedule] = useState(null);
+  const [actionFeedback, setActionFeedback] = useState(null);
 
   // Load user bookings from server
   const fetchBookings = useCallback(async () => {
@@ -101,6 +111,29 @@ export default function MyBookingsPage() {
     setSearchParams(updated, { replace: true });
   };
 
+  const handleCancelSuccess = () => {
+    setBookingToCancel(null);
+    setActionFeedback({
+      variant: 'success',
+      title: 'Reservation Cancelled',
+      message: 'Your reservation was cancelled and the time slot was released back to the facility schedule.',
+    });
+    fetchBookings();
+  };
+
+  const handleRescheduleSuccess = (updatedBooking) => {
+    setBookingToReschedule(null);
+    const dateFormatted = formatDate(updatedBooking.startAt, { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeFormatted = formatTimeRange(updatedBooking.startAt, updatedBooking.endAt);
+
+    setActionFeedback({
+      variant: 'success',
+      title: 'Reservation Rescheduled',
+      message: `Your reservation has been rescheduled to ${dateFormatted} (${timeFormatted}).`,
+    });
+    fetchBookings();
+  };
+
   const hasActiveFilters = Boolean(statusParam || fromDateParam || toDateParam);
 
   return (
@@ -113,6 +146,18 @@ export default function MyBookingsPage() {
           { label: 'My Bookings', path: '/bookings' },
         ]}
       />
+
+      {/* Action Notification Banner */}
+      {actionFeedback && (
+        <Alert
+          variant={actionFeedback.variant}
+          title={actionFeedback.title}
+          onClose={() => setActionFeedback(null)}
+          className="my-bookings-page__action-banner"
+        >
+          {actionFeedback.message}
+        </Alert>
+      )}
 
       {/* Filter Toolbar */}
       <section className="my-bookings-page__filters-section" aria-label="Reservation filters">
@@ -147,9 +192,31 @@ export default function MyBookingsPage() {
             onPageChange={handlePageChange}
             hasActiveFilters={hasActiveFilters}
             onResetFilters={handleResetFilters}
+            onCancelClick={(b) => setBookingToCancel(b)}
+            onRescheduleClick={(b) => setBookingToReschedule(b)}
           />
         )}
       </section>
+
+      {/* Direct Cancellation Dialog */}
+      {bookingToCancel && (
+        <CancelBookingDialog
+          isOpen={Boolean(bookingToCancel)}
+          onClose={() => setBookingToCancel(null)}
+          booking={bookingToCancel}
+          onSuccess={handleCancelSuccess}
+        />
+      )}
+
+      {/* Direct Rescheduling Dialog */}
+      {bookingToReschedule && (
+        <RescheduleBookingDialog
+          isOpen={Boolean(bookingToReschedule)}
+          onClose={() => setBookingToReschedule(null)}
+          booking={bookingToReschedule}
+          onSuccess={handleRescheduleSuccess}
+        />
+      )}
     </PageContainer>
   );
 }

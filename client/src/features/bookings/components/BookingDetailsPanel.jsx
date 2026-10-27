@@ -24,6 +24,7 @@ export default function BookingDetailsPanel({
   booking,
   onCancelClick,
   onRescheduleClick,
+  onActionSuccess,
 }) {
   if (!booking) return null;
 
@@ -220,6 +221,7 @@ export default function BookingDetailsPanel({
             booking={booking}
             onCancelClick={onCancelClick}
             onRescheduleClick={onRescheduleClick}
+            onActionSuccess={onActionSuccess}
           />
         </div>
       </Card>

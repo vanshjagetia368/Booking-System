@@ -98,6 +98,63 @@ export const bookingService = {
       },
     };
   },
+
+  /**
+   * Cancels a confirmed booking and releases its active slot allocations.
+   *
+   * @param {object} params
+   * @param {string} params.bookingId - 24-character hexadecimal MongoDB ObjectId
+   * @param {string} [params.reason=null] - Optional cancellation reason (max 500 chars)
+   * @returns {Promise<object>} Server-confirmed cancelled booking record
+   */
+  async cancelBooking({ bookingId, reason = null }) {
+    if (!bookingId) {
+      throw new Error('Booking identifier is required for cancellation.');
+    }
+
+    const payload = {};
+    if (reason && typeof reason === 'string' && reason.trim().length > 0) {
+      payload.reason = reason.trim().slice(0, 500);
+    }
+
+    const response = await apiClient.patch(
+      `/bookings/${encodeURIComponent(bookingId)}/cancel`,
+      payload,
+    );
+    return response?.data?.booking || response?.data || response;
+  },
+
+  /**
+   * Reschedules a confirmed booking to a new time interval with atomic reallocation.
+   *
+   * @param {object} params
+   * @param {string} params.bookingId - 24-character hexadecimal MongoDB ObjectId
+   * @param {string | Date} params.startAt - ISO 8601 instant string with timezone
+   * @param {string | Date} params.endAt - ISO 8601 instant string with timezone
+   * @returns {Promise<{ booking: object, slots: Array<object> }>} Updated booking record
+   */
+  async rescheduleBooking({ bookingId, startAt, endAt }) {
+    if (!bookingId) {
+      throw new Error('Booking identifier is required for rescheduling.');
+    }
+    if (!startAt || !endAt) {
+      throw new Error('Replacement start and end timestamps are required.');
+    }
+
+    const payload = {
+      startAt: typeof startAt === 'string' ? startAt : new Date(startAt).toISOString(),
+      endAt: typeof endAt === 'string' ? endAt : new Date(endAt).toISOString(),
+    };
+
+    const response = await apiClient.patch(
+      `/bookings/${encodeURIComponent(bookingId)}/reschedule`,
+      payload,
+    );
+    return {
+      booking: response?.data?.booking || response?.data || response,
+      slots: response?.data?.slots || [],
+    };
+  },
 };
 
 export default bookingService;

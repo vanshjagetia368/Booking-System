@@ -3627,3 +3627,428 @@ ul, ol {
   flex-direction: column;
   padding-top: var(--space-2);
 }
+
+/* ==========================================================================
+   Booking Cancellation & Rescheduling (Prompt 18)
+   ========================================================================== */
+
+/* Cancellation Dialog */
+.cancel-booking-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cancel-booking-dialog__summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background-color: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.cancel-booking-dialog__summary-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.cancel-booking-dialog__ref {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.05em;
+}
+
+.cancel-booking-dialog__resource-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.cancel-booking-dialog__summary-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.cancel-booking-dialog__detail-row {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.cancel-booking-dialog__detail-label {
+  color: var(--color-text-muted);
+  min-width: 75px;
+}
+
+.cancel-booking-dialog__detail-value {
+  color: var(--color-text-main);
+  font-weight: var(--font-weight-medium);
+}
+
+.cancel-booking-dialog__warning {
+  margin: 0;
+}
+
+.cancel-booking-dialog__reason-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cancel-booking-dialog__label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cancel-booking-dialog__optional {
+  text-transform: lowercase;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-normal);
+}
+
+.cancel-booking-dialog__textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  resize: vertical;
+  min-height: 75px;
+}
+
+.cancel-booking-dialog__textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.cancel-booking-dialog__char-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.cancel-booking-dialog__error {
+  margin: 0;
+}
+
+.cancel-booking-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.cancel-booking-dialog__spinner-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Rescheduling Dialog */
+.reschedule-booking-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.reschedule-booking-dialog__current-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background-color: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.reschedule-booking-dialog__current-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reschedule-booking-dialog__ref {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.reschedule-booking-dialog__resource-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.reschedule-booking-dialog__current-schedule {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.reschedule-booking-dialog__label {
+  color: var(--color-text-muted);
+}
+
+.reschedule-booking-dialog__schedule-text {
+  color: var(--color-text-main);
+  font-weight: var(--font-weight-medium);
+}
+
+.reschedule-booking-dialog__picker-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.reschedule-booking-dialog__error {
+  margin: 0;
+}
+
+.reschedule-booking-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.reschedule-booking-dialog__spinner-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Reschedule Availability Picker */
+.reschedule-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reschedule-picker__date-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.reschedule-picker__date-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reschedule-picker__date-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-main);
+}
+
+.reschedule-picker__date-input {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+}
+
+.reschedule-picker__date-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.reschedule-picker__quick-dates {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.reschedule-picker__quick-btn--active {
+  background-color: var(--color-surface-subtle);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.reschedule-picker__target-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background-color: var(--color-surface-subtle);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.reschedule-picker__slots-container {
+  min-height: 140px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.reschedule-picker__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.reschedule-picker__closed-notice,
+.reschedule-picker__empty-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.reschedule-picker__closed-sub {
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-1);
+}
+
+.reschedule-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--space-2);
+}
+
+.reschedule-slot-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  text-align: left;
+}
+
+.reschedule-slot-btn--available:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background-color: rgba(37, 99, 235, 0.04);
+}
+
+.reschedule-slot-btn--selected {
+  border-color: var(--color-primary);
+  background-color: rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.reschedule-slot-btn--unavailable {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background-color: var(--color-surface-subtle);
+}
+
+.reschedule-slot-btn--current {
+  border-style: dashed;
+}
+
+.reschedule-slot-btn__time {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.reschedule-picker__selection-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background-color: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+.reschedule-picker__selection-badge {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.reschedule-picker__selection-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-main);
+}
+
+/* Action Buttons & Feedback */
+.booking-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.booking-action-buttons__cancel-btn {
+  color: var(--color-danger);
+  border-color: var(--color-danger-light, #fca5a5);
+}
+
+.booking-action-buttons__cancel-btn:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.08);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.booking-action-feedback {
+  margin-bottom: var(--space-4);
+}
+
+.booking-action-feedback__alert {
+  margin: 0;
+}
+
+.booking-action-feedback__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.booking-action-feedback__message {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.booking-action-feedback__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.my-bookings-page__action-banner,
+.booking-details-page__success-banner {
+  margin-bottom: var(--space-4);
+}

@@ -4,19 +4,23 @@ import { ROUTES } from '../../../app/routes.js';
 import PageContainer from '../../../components/layout/PageContainer.jsx';
 import PageHeader from '../../../components/ui/PageHeader.jsx';
 import Button from '../../../components/ui/Button.jsx';
+import Alert from '../../../components/ui/Alert.jsx';
 import LoadingState from '../../../components/feedback/LoadingState.jsx';
 import ErrorState from '../../../components/feedback/ErrorState.jsx';
 import BookingDetailsPanel from '../components/BookingDetailsPanel.jsx';
+import CancelBookingDialog from '../components/CancelBookingDialog.jsx';
+import RescheduleBookingDialog from '../components/RescheduleBookingDialog.jsx';
 import bookingService from '../services/bookingService.js';
 import { formatBookingReference } from '../utils/bookingFormatters.js';
+import { formatDate, formatTimeRange } from '../../../utils/date.js';
 import { normalizeError } from '../../../utils/error.js';
 
 /**
  * BookingDetailsPage Component
  *
  * Dedicated view for an individual reservation record at /bookings/:bookingId.
- * Retrieves authoritative data from GET /api/v1/bookings/:bookingId, handles ownership/not-found
- * error states without information leakage, and provides back-navigation to My Bookings.
+ * Retrieves authoritative data from GET /api/v1/bookings/:bookingId and manages
+ * cancellation and rescheduling dialogs with atomic server updates.
  */
 export default function BookingDetailsPage() {
   const { bookingId } = useParams();
@@ -24,6 +28,11 @@ export default function BookingDetailsPage() {
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Dialog management states
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState(null);
 
   const fetchBooking = useCallback(async () => {
     if (!bookingId) {
@@ -65,6 +74,33 @@ export default function BookingDetailsPage() {
     fetchBooking();
   }, [fetchBooking]);
 
+  const handleCancelSuccess = (updatedBooking) => {
+    setBooking(updatedBooking);
+    setActionSuccessMessage({
+      title: 'Reservation Cancelled',
+      message: 'Your reservation has been successfully cancelled and its allocated slot has been released.',
+      variant: 'success',
+    });
+    setIsCancelOpen(false);
+  };
+
+  const handleRescheduleSuccess = (updatedBooking) => {
+    setBooking(updatedBooking);
+    const formattedDate = formatDate(updatedBooking.startAt, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const formattedTime = formatTimeRange(updatedBooking.startAt, updatedBooking.endAt);
+
+    setActionSuccessMessage({
+      title: 'Reservation Rescheduled',
+      message: `Your reservation has been successfully rescheduled to ${formattedDate} (${formattedTime}).`,
+      variant: 'success',
+    });
+    setIsRescheduleOpen(false);
+  };
+
   const reference = formatBookingReference(bookingId);
 
   return (
@@ -101,6 +137,18 @@ export default function BookingDetailsPage() {
         </Link>
       </div>
 
+      {/* Success Notification Banner */}
+      {actionSuccessMessage && (
+        <Alert
+          variant={actionSuccessMessage.variant}
+          title={actionSuccessMessage.title}
+          onClose={() => setActionSuccessMessage(null)}
+          className="booking-details-page__success-banner"
+        >
+          {actionSuccessMessage.message}
+        </Alert>
+      )}
+
       <section className="booking-details-page__content" aria-live="polite">
         {isLoading ? (
           <LoadingState message="Loading reservation details..." />
@@ -121,9 +169,34 @@ export default function BookingDetailsPage() {
             }
           />
         ) : (
-          <BookingDetailsPanel booking={booking} />
+          <BookingDetailsPanel
+            booking={booking}
+            onCancelClick={() => setIsCancelOpen(true)}
+            onRescheduleClick={() => setIsRescheduleOpen(true)}
+            onActionSuccess={fetchBooking}
+          />
         )}
       </section>
+
+      {/* Cancellation Dialog */}
+      {booking && isCancelOpen && (
+        <CancelBookingDialog
+          isOpen={isCancelOpen}
+          onClose={() => setIsCancelOpen(false)}
+          booking={booking}
+          onSuccess={handleCancelSuccess}
+        />
+      )}
+
+      {/* Rescheduling Dialog */}
+      {booking && isRescheduleOpen && (
+        <RescheduleBookingDialog
+          isOpen={isRescheduleOpen}
+          onClose={() => setIsRescheduleOpen(false)}
+          booking={booking}
+          onSuccess={handleRescheduleSuccess}
+        />
+      )}
     </PageContainer>
   );
 }
