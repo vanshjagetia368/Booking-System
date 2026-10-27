@@ -112,3 +112,18 @@ export function isAuthError(error) {
 export function isConflictError(error) {
   return error instanceof ApiError && error.isConflict;
 }
+
+/**
+ * Normalizes an unknown error into a structured object containing message, code, and status.
+ *
+ * @param {unknown} error
+ * @returns {{ message: string, code: string, status?: number, details?: Record<string, unknown> | null }}
+ */
+export function normalizeError(error) {
+  return {
+    message: normalizeErrorMessage(error),
+    code: getErrorCode(error),
+    status: error?.status,
+    details: getErrorDetails(error),
+  };
+}

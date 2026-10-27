@@ -16,6 +16,8 @@ import {
 import {
   BookingCreatePage,
   BookingConfirmationPage,
+  MyBookingsPage,
+  BookingDetailsPage,
 } from '../features/bookings/index.js';
 
 /**
@@ -48,43 +50,14 @@ export default function AppRoutes() {
           {/* Booking Confirmation Receipt (Prompt 16) */}
           <Route path={ROUTES.BOOKING_CONFIRMATION(':bookingId')} element={<BookingConfirmationPage />} />
 
-          {/* Personal Bookings History (Prompt 18) */}
-          <Route
-            path={ROUTES.BOOKINGS}
-            element={
-              <FeaturePlaceholder
-                title="My Reservations & Booking History"
-                promptStage="Prompt 18/22: Personal Booking History, Cancellation & Rescheduling"
-                description="Track current reservations, view booking history, and manage existing allocations."
-                plannedCapabilities={[
-                  'List active upcoming bookings and past historical records',
-                  'Eligible booking cancellation with automatic atomic slot release',
-                  'Reschedule reservation with atomic interval reassignment and validation',
-                  'Filter bookings by status: confirmed, cancelled, completed',
-                ]}
-              />
-            }
-          />
+          {/* Personal Bookings History (Prompt 17) */}
+          <Route path={ROUTES.BOOKINGS} element={<MyBookingsPage />} />
 
           {/* Backward-compatibility redirect for /my-bookings -> /bookings */}
           <Route path="/my-bookings" element={<Navigate to={ROUTES.BOOKINGS} replace />} />
 
-          {/* Booking Confirmation / Details (Prompt 18) */}
-          <Route
-            path={ROUTES.BOOKING_DETAILS(':bookingId')}
-            element={
-              <FeaturePlaceholder
-                title="Booking Confirmation & Details"
-                promptStage="Prompt 18/22: Personal Booking History, Cancellation & Rescheduling"
-                description="Detailed view of a specific reservation with confirmation details, schedule, and cancellation actions."
-                plannedCapabilities={[
-                  'Unique reservation identifier and timestamped receipt',
-                  'Resource details and allocated time interval [startAt, endAt)',
-                  'Ownership verification and cancellation/rescheduling action controls',
-                ]}
-              />
-            }
-          />
+          {/* Individual Booking Details (Prompt 17) */}
+          <Route path={ROUTES.BOOKING_DETAILS(':bookingId')} element={<BookingDetailsPage />} />
         </Route>
 
         {/* Administrator-Only Protected Routes */}

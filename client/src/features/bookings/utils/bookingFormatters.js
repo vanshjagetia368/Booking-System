@@ -68,3 +68,72 @@ export function isPastBooking(endAt, now = new Date()) {
   const end = new Date(endAt).getTime();
   return !Number.isNaN(end) && end <= now.getTime();
 }
+
+/**
+ * Checks whether a booking start time has already begun or passed.
+ *
+ * @param {string | Date} startAt
+ * @param {Date} [now=new Date()]
+ * @returns {boolean}
+ */
+export function isBookingStarted(startAt, now = new Date()) {
+  const start = new Date(startAt).getTime();
+  return !Number.isNaN(start) && start <= now.getTime();
+}
+
+/**
+ * Evaluates whether a booking meets backend policy eligibility for cancellation.
+ * Policy: status must be 'confirmed' AND startAt must be in the future (> Date.now()).
+ *
+ * @param {object} booking
+ * @param {Date} [now=new Date()]
+ * @returns {boolean}
+ */
+export function canCancelBooking(booking, now = new Date()) {
+  if (!booking || booking.status !== 'confirmed') return false;
+  const startMs = new Date(booking.startAt).getTime();
+  return !Number.isNaN(startMs) && startMs > now.getTime();
+}
+
+/**
+ * Evaluates whether a booking meets backend policy eligibility for rescheduling.
+ * Policy: status must be 'confirmed' AND startAt must be in the future (> Date.now()).
+ *
+ * @param {object} booking
+ * @param {Date} [now=new Date()]
+ * @returns {boolean}
+ */
+export function canRescheduleBooking(booking, now = new Date()) {
+  if (!booking || booking.status !== 'confirmed') return false;
+  const startMs = new Date(booking.startAt).getTime();
+  return !Number.isNaN(startMs) && startMs > now.getTime();
+}
+
+/**
+ * Returns an explanatory reason string why a booking cannot be cancelled or rescheduled,
+ * or null if the booking is fully eligible.
+ *
+ * @param {object} booking
+ * @param {Date} [now=new Date()]
+ * @returns {string | null}
+ */
+export function getActionIneligibilityReason(booking, now = new Date()) {
+  if (!booking) return null;
+
+  if (booking.status === 'cancelled') {
+    return 'This reservation has been cancelled and cannot be modified.';
+  }
+
+  if (booking.status === 'completed') {
+    return 'This reservation has already concluded.';
+  }
+
+  if (booking.status === 'confirmed') {
+    const startMs = new Date(booking.startAt).getTime();
+    if (!Number.isNaN(startMs) && startMs <= now.getTime()) {
+      return 'This reservation is currently in progress or past its scheduled start time and can no longer be modified or cancelled.';
+    }
+  }
+
+  return null;
+}

@@ -49,7 +49,7 @@ client/                     React frontend workspace
       admin/                Administrator management views (Prompt 8)
       auth/                 Authentication and session views (Prompt 5)
       availability/         Schedule and availability views (Prompt 6)
-      bookings/             Reservation workflows, submission, conflict handling, and confirmation (Prompt 16)
+      bookings/             Reservation workflows, history, filtering, pagination, and details (Prompt 17)
       resources/            Home overview and resource catalog views (Prompts 2 & 6)
     hooks/                  Custom React hooks
     lib/                    Shared library wrappers and re-exports
@@ -370,7 +370,14 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–16 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, Role-Aware Navigation, Resource Discovery, Resource Details, Availability Calendar, Slot Selection, and Booking Creation Workflow)
+### Implemented in Prompts 1–17 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, Role-Aware Navigation, Resource Discovery, Resource Details, Availability Calendar, Slot Selection, Booking Creation Workflow, Personal Booking History, and Booking Details)
+- **Personal Booking History, Details, Status Indicators, Filtering, and Pagination (Prompt 17):**
+  - **Authenticated Booking History (`MyBookingsPage.jsx`, `bookingService.js`):** Connects to `GET /api/v1/bookings/my` using strict query parameter sanitization whitelisting (`page`, `limit`, `status`, `resourceId`, `fromDate`, `toDate`) and full URL search param synchronization (`useSearchParams`).
+  - **Status & Date Range Filtering (`BookingFilters.jsx`):** Segmented status tabs (`confirmed`, `completed`, `cancelled`), date pickers (`fromDate`, `toDate`), filter chips with one-click dismiss, and reset button that automatically resets pagination to page 1.
+  - **Responsive Booking Cards & List (`BookingCard.jsx`, `BookingList.jsx`):** Adaptive grid/card layout displaying facility name, reference code, status badge, formatted date, time interval with duration, capacity, location, user notes snippet, cancellation banners, and multi-page pagination with page pills and prev/next controls.
+  - **Accessible Status Badges (`BookingStatusBadge.jsx`):** Visual indicators combining iconography, semantic variants, and text labels for `confirmed`, `completed`, and `cancelled` statuses.
+  - **Authoritative Booking Details View (`BookingDetailsPage.jsx`, `BookingDetailsPanel.jsx`):** Dedicated route `/bookings/:bookingId` fetching verified booking record from `GET /api/v1/bookings/:bookingId`, with 24-character hexadecimal ObjectId pre-validation, comprehensive schedule and resource specifications, cancellation audit record, and defense against data enumeration via consistent 404 handling.
+  - **Policy-Aware Booking Actions (`BookingActions.jsx`):** Enforces backend cancellation and rescheduling eligibility (confirmed status + future start time `startAt > Date.now()`), displaying clear non-interactive policy explanations for completed, elapsed, or cancelled reservations while preparing integration hooks for Prompt 18 workflows.
 - **Booking Creation Workflow, Submission, Conflict Handling, and Confirmation (Prompt 16):**
   - **Booking API Service (`bookingService.js`):** Centralized communication with Express backend booking endpoints (`POST /api/v1/bookings`, `GET /api/v1/bookings/:bookingId`, `GET /api/v1/bookings/my`). Submits exact payload `{ resourceId, startAt, endAt, notes }` with ISO 8601 timestamps and rejects client-side mass assignment.
   - **Booking Creation Workflow & Pre-validation (`BookingCreatePage.jsx`):** Coordinates selection state passed via router navigation or URL query parameters (`resourceId`, `startAt`, `endAt`). Performs client pre-validation (valid timestamps, positive duration, future start, notes length <= 1000). Includes missing selection empty state with navigation back to discovery.
@@ -416,4 +423,4 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **API Specification & Architecture Documentation:** Comprehensive and synchronized documentation in `docs/` (`api-specification/api-v1.md`, `architecture/overview.md`, `database-design/data-model.md`, `requirements/project-requirements.md`).
 
 ### Planned for Future Prompts
-- **Prompt 17+:** React frontend feature implementation (Personal user booking history, booking detail view, self-service cancellation and rescheduling workflows, and Administrative operational dashboards).
+- **Prompt 18+:** React frontend feature implementation (Personal user booking self-service cancellation modal with atomic slot release, interactive rescheduling workflow, and Administrative operational dashboards).

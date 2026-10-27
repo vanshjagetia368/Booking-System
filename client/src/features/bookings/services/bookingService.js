@@ -60,22 +60,41 @@ export const bookingService = {
   },
 
   /**
+   * Allowed query parameters for booking history inspection (matches backend whitelist).
+   */
+  ALLOWED_HISTORY_PARAMS: ['page', 'limit', 'status', 'resourceId', 'fromDate', 'toDate'],
+
+  /**
    * Retrieves paginated booking history for the current user.
    *
-   * @param {object} [params={}] - Optional query filters (status, resourceId, page, limit)
+   * Sanitizes query parameters to prevent sending unpermitted keys that backend rejects.
+   *
+   * @param {object} [params={}] - Optional query filters (status, resourceId, page, limit, fromDate, toDate)
    * @returns {Promise<{ bookings: Array<object>, pagination: object }>}
    */
   async getUserBookings(params = {}) {
-    const response = await apiClient.get('/bookings/my', { params });
+    const sanitizedParams = {};
+    const allowed = ['page', 'limit', 'status', 'resourceId', 'fromDate', 'toDate'];
+
+    for (const key of allowed) {
+      if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+        sanitizedParams[key] = params[key];
+      }
+    }
+
+    const response = await apiClient.get('/bookings/my', { params: sanitizedParams });
+    const meta = response?.meta || {};
+    const bookings = response?.data?.bookings || [];
+
     return {
-      bookings: response?.data?.bookings || [],
-      pagination: response?.meta || {
-        page: 1,
-        limit: 10,
-        total: 0,
-        totalPages: 0,
-        hasNextPage: false,
-        hasPrevPage: false,
+      bookings,
+      pagination: {
+        page: Number(meta.page) || 1,
+        limit: Number(meta.limit) || 10,
+        totalItems: meta.totalItems !== undefined ? Number(meta.totalItems) : bookings.length,
+        totalPages: meta.totalPages !== undefined ? Number(meta.totalPages) : 1,
+        hasNextPage: Boolean(meta.hasNextPage),
+        hasPrevPage: Boolean(meta.hasPrevPage),
       },
     };
   },
