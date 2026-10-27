@@ -65,6 +65,11 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -123,6 +128,7 @@ bookingSchema.methods.toSafeObject = function () {
     notes: this.notes,
     cancellationReason: this.cancellationReason || null,
     cancelledAt: this.cancelledAt || null,
+    cancelledBy: this.cancelledBy ? this.cancelledBy.toString() : null,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };

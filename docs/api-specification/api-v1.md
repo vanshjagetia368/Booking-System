@@ -1071,6 +1071,309 @@ Reschedules an active confirmed reservation to a new time interval with atomic r
 
 ---
 
+## Implemented Endpoints (Prompt 11)
+
+### Administrative Booking Management
+
+#### 1. List Administrative Bookings
+
+`GET /api/v1/admin/bookings`
+
+Retrieves a paginated list of bookings across all users with administrative filters, deterministic sorting, and safe resource/user details.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Query Parameters:**
+  - `page` (optional integer >= 1, default: 1)
+  - `limit` (optional integer 1-100, default: 20)
+  - `status` (optional enum: `confirmed`, `cancelled`, `completed`)
+  - `resourceId` (optional 24-character hexadecimal ObjectId)
+  - `userId` (optional 24-character hexadecimal ObjectId)
+  - `category` (optional enum: `study-room`, `meeting-room`, `lab-equipment`, `other`)
+  - `fromDate` (optional ISO 8601 date string)
+  - `toDate` (optional ISO 8601 date string)
+  - `sortBy` (optional enum: `startAt`, `createdAt`, `endAt`, `status`, default: `startAt`)
+  - `sortOrder` (optional enum: `asc`, `desc`, default: `desc`)
+- **Success Status:** `200 OK`
+
+##### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Administrative bookings retrieved successfully.",
+  "data": {
+    "bookings": [
+      {
+        "id": "671e621bf66895768659da05",
+        "userId": "671e482bf66895768659d9ee",
+        "user": {
+          "id": "671e482bf66895768659d9ee",
+          "name": "Jane Doe",
+          "email": "jane.doe@university.edu"
+        },
+        "resourceId": "671e482bf66895768659d9f1",
+        "resource": {
+          "id": "671e482bf66895768659d9f1",
+          "name": "Study Room A",
+          "category": "study-room",
+          "location": "Library Floor 2, Room 204",
+          "capacity": 4,
+          "slotDurationMinutes": 30
+        },
+        "startAt": "2026-10-28T14:00:00.000Z",
+        "endAt": "2026-10-28T15:00:00.000Z",
+        "status": "confirmed",
+        "notes": "Group study session",
+        "cancellationReason": null,
+        "cancelledAt": null,
+        "cancelledBy": null,
+        "createdAt": "2026-10-27T12:00:00.000Z",
+        "updatedAt": "2026-10-27T12:00:00.000Z"
+      }
+    ]
+  },
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 1,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPrevPage": false
+  }
+}
+```
+
+##### Common Error Responses
+- `401 Unauthorized` (`AUTHENTICATION_REQUIRED`, `TOKEN_INVALID`, `TOKEN_EXPIRED`)
+- `403 Forbidden` (`INSUFFICIENT_PERMISSIONS`) — When accessed by non-admin accounts.
+- `400 Bad Request` (`VALIDATION_ERROR`) — Invalid pagination, unpermitted filter keys, or malformed ObjectIds.
+
+---
+
+#### 2. Administrative Booking Cancellation
+
+`PATCH /api/v1/admin/bookings/:bookingId/cancel`
+
+Controlled administrative cancellation of a confirmed booking with atomic slot release in a MongoDB transaction.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Path Parameters:**
+  - `bookingId` (required 24-character hexadecimal ObjectId)
+- **Request Body (JSON):**
+  - `reason` (optional string, max 500 characters, default: `'Cancelled by administrator'`)
+- **Status Transition Policy:**
+  - Only `confirmed` bookings can be cancelled.
+  - Already cancelled bookings reject mutation (`409 Conflict`, `BOOKING_ALREADY_CANCELLED`).
+  - Completed or past bookings reject cancellation (`409 Conflict`, `INVALID_BOOKING_TRANSITION`).
+  - Arbitrary status modifications from client payloads are strictly prohibited.
+  - Records administrative audit metadata: `cancelledBy` (admin user ID), `cancelledAt` (timestamp), and `cancellationReason`.
+  - Atomically deletes active `ResourceSlot` records associated with the booking, restoring calendar availability while preserving the historical `Booking` document.
+- **Success Status:** `200 OK`
+
+##### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Booking cancelled successfully by administrator.",
+  "data": {
+    "booking": {
+      "id": "671e621bf66895768659da05",
+      "userId": "671e482bf66895768659d9ee",
+      "user": {
+        "id": "671e482bf66895768659d9ee",
+        "name": "Jane Doe",
+        "email": "jane.doe@university.edu"
+      },
+      "resourceId": "671e482bf66895768659d9f1",
+      "resource": {
+        "id": "671e482bf66895768659d9f1",
+        "name": "Study Room A",
+        "category": "study-room",
+        "location": "Library Floor 2, Room 204",
+        "capacity": 4,
+        "slotDurationMinutes": 30
+      },
+      "startAt": "2026-10-28T14:00:00.000Z",
+      "endAt": "2026-10-28T15:00:00.000Z",
+      "status": "cancelled",
+      "notes": "Group study session",
+      "cancellationReason": "Facility maintenance emergency",
+      "cancelledAt": "2026-10-27T16:00:00.000Z",
+      "cancelledBy": {
+        "id": "671e482bf66895768659d9a1",
+        "name": "Admin User",
+        "email": "admin@university.edu"
+      },
+      "createdAt": "2026-10-27T12:00:00.000Z",
+      "updatedAt": "2026-10-27T16:00:00.000Z"
+    }
+  }
+}
+```
+
+##### Common Error Responses
+- `401 Unauthorized` (`AUTHENTICATION_REQUIRED`, `TOKEN_EXPIRED`)
+- `403 Forbidden` (`INSUFFICIENT_PERMISSIONS`)
+- `404 Not Found` (`BOOKING_NOT_FOUND`) — If the target booking does not exist.
+- `409 Conflict` (`BOOKING_ALREADY_CANCELLED`, `INVALID_BOOKING_TRANSITION`) — When booking is already cancelled or completed.
+
+---
+
+### Administrative Maintenance Management
+
+#### 3. Create Maintenance Blackout Period
+
+`POST /api/v1/admin/resources/:resourceId/maintenance`
+
+Schedules a maintenance blackout period during which a resource is marked unavailable.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Path Parameters:**
+  - `resourceId` (required 24-character hexadecimal ObjectId)
+- **Request Body (JSON):**
+  - `startAt` (required ISO 8601 instant with timezone, e.g. `"2026-10-29T08:00:00Z"`)
+  - `endAt` (required ISO 8601 instant with timezone, e.g. `"2026-10-29T12:00:00Z"`)
+  - `reason` (optional string, max 500 characters, default: `"Scheduled maintenance"`)
+- **Validation & Overlap Policy:**
+  - Enforces `startAt < endAt` strictly on half-open interval `[startAt, endAt)`.
+  - Rejects maintenance intervals occurring completely in the past (`endAt <= Date.now()`).
+  - Rejects unpermitted fields (mass assignment protection).
+  - Rejects overlapping existing maintenance blocks for the same resource (`409 Conflict`, `MAINTENANCE_OVERLAP_CONFLICT`).
+  - **Confirmed Booking Conflict Protection (Section 8):** Checks for overlapping confirmed bookings (`existing.startAt < maintenance.endAt && existing.endAt > maintenance.startAt`). If confirmed bookings exist, returns `409 Conflict` (`MAINTENANCE_BOOKING_CONFLICT`) with structured conflict details. Does **not** silently cancel bookings. The administrator must explicitly resolve or cancel conflicting bookings prior to scheduling maintenance.
+  - Records `createdBy` with the authenticated administrator's ID.
+- **Success Status:** `201 Created`
+
+##### Example 201 Created Response
+```json
+{
+  "success": true,
+  "message": "Maintenance block created successfully.",
+  "data": {
+    "maintenanceBlock": {
+      "id": "671e7a5bf66895768659db01",
+      "resourceId": "671e482bf66895768659d9f1",
+      "startAt": "2026-10-29T08:00:00.000Z",
+      "endAt": "2026-10-29T12:00:00.000Z",
+      "reason": "HVAC system filter replacement",
+      "createdBy": "671e482bf66895768659d9a1",
+      "createdAt": "2026-10-27T16:30:00.000Z",
+      "updatedAt": "2026-10-27T16:30:00.000Z"
+    }
+  }
+}
+```
+
+##### Example 409 Conflict (Confirmed Booking Overlap) Response
+```json
+{
+  "success": false,
+  "message": "Cannot schedule maintenance: 1 confirmed booking(s) overlap with the requested interval. The administrator must resolve or cancel conflicting bookings before scheduling maintenance.",
+  "code": "MAINTENANCE_BOOKING_CONFLICT",
+  "details": {
+    "conflictingBookingsCount": 1,
+    "conflictingBookings": [
+      {
+        "id": "671e621bf66895768659da05",
+        "userId": "671e482bf66895768659d9ee",
+        "startAt": "2026-10-29T09:00:00.000Z",
+        "endAt": "2026-10-29T10:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### 4. List Maintenance Blackout Periods
+
+`GET /api/v1/admin/resources/:resourceId/maintenance`
+
+Retrieves a paginated list of maintenance blackout periods for a specific resource.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Path Parameters:**
+  - `resourceId` (required 24-character hexadecimal ObjectId)
+- **Query Parameters:**
+  - `page` (optional integer >= 1, default: 1)
+  - `limit` (optional integer 1-100, default: 20)
+  - `fromDate` (optional ISO 8601 date string)
+  - `toDate` (optional ISO 8601 date string)
+- **Deterministic Ordering:** Chronological by `startAt: 1, createdAt: 1`.
+- **Empty Resource Handling:** Returns empty array `[]` with valid pagination when no maintenance blocks exist.
+- **Success Status:** `200 OK`
+
+##### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Maintenance blocks retrieved successfully.",
+  "data": {
+    "maintenanceBlocks": [
+      {
+        "id": "671e7a5bf66895768659db01",
+        "resourceId": "671e482bf66895768659d9f1",
+        "startAt": "2026-10-29T08:00:00.000Z",
+        "endAt": "2026-10-29T12:00:00.000Z",
+        "reason": "HVAC system filter replacement",
+        "createdBy": {
+          "id": "671e482bf66895768659d9a1",
+          "name": "Admin User",
+          "email": "admin@university.edu"
+        },
+        "createdAt": "2026-10-27T16:30:00.000Z",
+        "updatedAt": "2026-10-27T16:30:00.000Z"
+      }
+    ]
+  },
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 1,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPrevPage": false
+  }
+}
+```
+
+---
+
+#### 5. Delete Maintenance Blackout Period
+
+`DELETE /api/v1/admin/maintenance/:maintenanceId`
+*(Also accessible via scoped route `DELETE /api/v1/admin/resources/:resourceId/maintenance/:maintenanceId`)*
+
+Deletes a maintenance blackout period.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Path Parameters:**
+  - `maintenanceId` (required 24-character hexadecimal ObjectId)
+- **Availability Re-eligibility:**
+  - Once removed, the blocked intervals immediately become eligible for reservation calculations in `calculateResourceAvailability()`, provided they fall within operating hours and are not booked by another reservation.
+- **Success Status:** `200 OK`
+
+##### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Maintenance block deleted successfully.",
+  "data": {
+    "maintenanceBlock": {
+      "id": "671e7a5bf66895768659db01",
+      "resourceId": "671e482bf66895768659d9f1",
+      "startAt": "2026-10-29T08:00:00.000Z",
+      "endAt": "2026-10-29T12:00:00.000Z",
+      "reason": "HVAC system filter replacement",
+      "createdBy": "671e482bf66895768659d9a1",
+      "createdAt": "2026-10-27T16:30:00.000Z",
+      "updatedAt": "2026-10-27T16:30:00.000Z"
+    }
+  }
+}
+```
+
+---
+
 ## Planned API Groups (Upcoming Prompts)
 
 | Group | Namespace | Responsibilities | Target Prompt | Access |
@@ -1082,12 +1385,12 @@ Reschedules an active confirmed reservation to a new time interval with atomic r
 | Allocation Primitives | *Internal Service* | Atomic slot allocation, unique index concurrency, transaction safety | **Implemented (Prompt 8)** | Server-side internal primitives |
 | Booking Creation | `/api/v1/bookings` | Authenticated reservation creation with atomic slot allocation | **Implemented (Prompt 9)** | Authenticated (ownership enforced) |
 | Booking Lifecycle | `/api/v1/bookings` | User booking history, detail inspection, cancellation, reschedule | **Implemented (Prompt 10)** | Authenticated (ownership enforced) |
-| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 11 | Administrator |
+| Administration | `/api/v1/admin/bookings`, `/api/v1/admin/resources/:id/maintenance`, `/api/v1/admin/maintenance/:id` | Admin booking list/cancellation & maintenance block management | **Implemented (Prompt 11)** | Administrator |
 
 ---
 
 ## Concurrency and Transaction Requirements
 
-Reservation creation, cancellation, and rescheduling require multi-document consistency across `Bookings` and `ResourceSlots`. The application uses MongoDB transactions with Mongoose sessions.
+Reservation creation, cancellation, rescheduling, and maintenance block creation require multi-document consistency across `Bookings`, `ResourceSlots`, and `MaintenanceBlocks`. The application uses MongoDB transactions with Mongoose sessions.
 
-Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions and will return `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`).
+Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions and will fall back safely where appropriate or return `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`).

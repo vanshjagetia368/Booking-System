@@ -21,9 +21,24 @@ export function formatBooking(booking) {
     ? booking.resourceId
     : null;
 
+  const userDoc = booking.userId && typeof booking.userId === 'object' && booking.userId._id
+    ? booking.userId
+    : null;
+
+  const cancellerDoc = booking.cancelledBy && typeof booking.cancelledBy === 'object' && booking.cancelledBy._id
+    ? booking.cancelledBy
+    : null;
+
   return {
     id: booking._id.toString(),
-    userId: booking.userId.toString(),
+    userId: userDoc ? userDoc._id.toString() : booking.userId.toString(),
+    user: userDoc
+      ? {
+          id: userDoc._id.toString(),
+          name: userDoc.name,
+          email: userDoc.email,
+        }
+      : null,
     resourceId: resDoc ? resDoc._id.toString() : booking.resourceId.toString(),
     resource: resDoc
       ? {
@@ -42,6 +57,15 @@ export function formatBooking(booking) {
     notes: booking.notes,
     cancellationReason: booking.cancellationReason || null,
     cancelledAt: booking.cancelledAt || null,
+    cancelledBy: cancellerDoc
+      ? {
+          id: cancellerDoc._id.toString(),
+          name: cancellerDoc.name,
+          email: cancellerDoc.email,
+        }
+      : booking.cancelledBy
+        ? booking.cancelledBy.toString()
+        : null,
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
   };
@@ -486,6 +510,235 @@ export async function rescheduleBooking({ bookingId, userId, startAt, endAt }) {
   }
 }
 
+/**
+ * Retrieves a paginated list of bookings for administrative inspection.
+ * Supports composable filtering by status, resourceId, userId, category, and date range.
+ *
+ * @param {object} queryOptions - Validated administrative query parameters
+ * @returns {Promise<{ bookings: object[], pagination: object }>}
+ */
+export async function listAdminBookings(queryOptions = {}) {
+  const {
+    page = 1,
+    limit = 20,
+    status = null,
+    resourceId = null,
+    userId = null,
+    category = null,
+    fromDate = null,
+    toDate = null,
+    sortBy = 'startAt',
+    sortOrder = -1,
+  } = queryOptions;
+
+  const query = {};
+
+  if (status) {
+    query.status = status;
+  }
+
+  if (userId) {
+    query.userId = userId;
+  }
+
+  if (fromDate || toDate) {
+    query.startAt = {};
+    if (fromDate) {
+      query.startAt.$gte = fromDate;
+    }
+    if (toDate) {
+      query.startAt.$lte = toDate;
+    }
+  }
+
+  // Handle category filter and composability with resourceId
+  if (category) {
+    const matchingResourceIds = await Resource.find({ category }).distinct('_id');
+    if (resourceId) {
+      const isMatched = matchingResourceIds.some((id) => id.toString() === resourceId.toString());
+      if (!isMatched) {
+        // Specified resource does not match requested category filter
+        return {
+          bookings: [],
+          pagination: {
+            page,
+            limit,
+            totalItems: 0,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        };
+      }
+      query.resourceId = resourceId;
+    } else {
+      query.resourceId = { $in: matchingResourceIds };
+    }
+  } else if (resourceId) {
+    query.resourceId = resourceId;
+  }
+
+  const skip = (page - 1) * limit;
+
+  // Deterministic sorting with secondary sort key on _id
+  const sort = { [sortBy]: sortOrder, _id: -1 };
+
+  const [bookings, totalItems] = await Promise.all([
+    Booking.find(query)
+      .populate('userId', 'name email')
+      .populate('resourceId', 'name category location capacity slotDurationMinutes description')
+      .populate('cancelledBy', 'name email')
+      .sort(sort)
+      .skip(skip)
+      .limit(limit),
+    Booking.countDocuments(query),
+  ]);
+
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+
+  return {
+    bookings: bookings.map(formatBooking),
+    pagination: {
+      page,
+      limit,
+      totalItems,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+}
+
+/**
+ * Controlled administrative booking cancellation with transactional slot release.
+ *
+ * Enforces:
+ * 1. Booking existence check (404 if not found).
+ * 2. Status policy: cancellable only when status is 'confirmed'.
+ * 3. Prevention of repeated cancellations or invalid transitions.
+ * 4. Audit traceability: records cancelledBy (admin user id), cancelledAt, and optional reason.
+ * 5. Atomic release of associated ResourceSlots in a MongoDB transaction.
+ *
+ * @param {object} params
+ * @param {string} params.bookingId - Target booking ObjectId
+ * @param {string} params.adminUserId - Authenticated administrator ObjectId
+ * @param {string | null} [params.reason=null] - Administrative cancellation reason
+ * @returns {Promise<object>}
+ */
+export async function cancelAdminBooking({ bookingId, adminUserId, reason = null }) {
+  // 1. Initial read & validation
+  const existingBooking = await Booking.findById(bookingId);
+
+  if (!existingBooking) {
+    throw ApiError.notFound('Booking not found.', 'BOOKING_NOT_FOUND');
+  }
+
+  if (existingBooking.status === 'cancelled') {
+    throw ApiError.conflict('This booking has already been cancelled.', 'BOOKING_ALREADY_CANCELLED');
+  }
+
+  if (existingBooking.status === 'completed') {
+    throw ApiError.conflict('Completed bookings cannot be cancelled.', 'INVALID_BOOKING_TRANSITION');
+  }
+
+  if (existingBooking.status !== 'confirmed') {
+    throw ApiError.conflict('Only confirmed bookings can be cancelled.', 'INVALID_BOOKING_TRANSITION');
+  }
+
+  if (existingBooking.endAt.getTime() <= Date.now()) {
+    throw ApiError.conflict('Past or completed bookings cannot be cancelled.', 'INVALID_BOOKING_TRANSITION');
+  }
+
+  // 2. Atomic cancellation and slot release inside a transaction
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedDoc;
+
+    const executeWork = async (activeSession) => {
+      const sessionOptions = activeSession ? { session: activeSession } : {};
+      const booking = await Booking.findById(bookingId, null, sessionOptions);
+
+      if (!booking) {
+        throw ApiError.notFound('Booking not found.', 'BOOKING_NOT_FOUND');
+      }
+
+      if (booking.status !== 'confirmed') {
+        throw ApiError.conflict(
+          'Booking cannot be cancelled because its status has changed.',
+          'INVALID_BOOKING_TRANSITION',
+        );
+      }
+
+      if (booking.endAt.getTime() <= Date.now()) {
+        throw ApiError.conflict(
+          'Past or completed bookings cannot be cancelled.',
+          'INVALID_BOOKING_TRANSITION',
+        );
+      }
+
+      // Record administrative cancellation metadata
+      booking.status = 'cancelled';
+      booking.cancelledAt = new Date();
+      booking.cancelledBy = adminUserId;
+      booking.cancellationReason = typeof reason === 'string' && reason.trim()
+        ? reason.trim()
+        : 'Cancelled by administrator';
+
+      if (activeSession) {
+        await booking.save({ session: activeSession });
+      } else {
+        await booking.save();
+      }
+
+      // Atomically release active slot allocations belonging to this booking
+      await releaseBookingSlots(booking._id, activeSession);
+
+      updatedDoc = booking;
+    };
+
+    try {
+      session.startTransaction();
+      await executeWork(session);
+      await session.commitTransaction();
+    } catch (txError) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+
+      // Handle standalone MongoDB without replica set transaction support gracefully
+      if (
+        txError.code === 20 ||
+        (txError.message && txError.message.includes('Transaction numbers are only allowed on a replica set member or mongos'))
+      ) {
+        await executeWork(null);
+      } else {
+        throw txError;
+      }
+    }
+
+    await updatedDoc.populate([
+      { path: 'userId', select: 'name email' },
+      { path: 'resourceId', select: 'name category location capacity slotDurationMinutes description' },
+      { path: 'cancelledBy', select: 'name email' },
+    ]);
+
+    return formatBooking(updatedDoc);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    throw ApiError.internal(
+      'An unexpected error occurred while cancelling the booking.',
+      'BOOKING_CANCELLATION_FAILED',
+      error.message,
+    );
+  } finally {
+    await session.endSession();
+  }
+}
+
 export {
   allocateBookingWithSlots,
   releaseBookingSlots,
@@ -498,6 +751,8 @@ export default {
   getBookingById,
   cancelBooking,
   rescheduleBooking,
+  listAdminBookings,
+  cancelAdminBooking,
   formatBooking,
   allocateBookingWithSlots,
   releaseBookingSlots,

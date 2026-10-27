@@ -6,9 +6,19 @@ import {
   getAdminResourceById,
 } from '../controllers/resource.controller.js';
 import {
+  createMaintenanceBlock,
+  listMaintenanceBlocks,
+  deleteMaintenanceBlock,
+} from '../controllers/maintenance.controller.js';
+import {
   validateAdminQuery,
   validateResourceIdParam,
 } from '../validators/resource.validator.js';
+import {
+  validateCreateMaintenanceBlock,
+  validateListMaintenanceQuery,
+  validateMaintenanceIdParam,
+} from '../validators/maintenance.validator.js';
 
 const adminResourceRouter = Router();
 
@@ -26,5 +36,38 @@ adminResourceRouter.get('/', validateAdminQuery, listAdminResources);
  * Retrieve administrative resource details (including inactive).
  */
 adminResourceRouter.get('/:resourceId', validateResourceIdParam, getAdminResourceById);
+
+/**
+ * POST /api/v1/admin/resources/:resourceId/maintenance
+ * Create a maintenance blackout period for a resource.
+ */
+adminResourceRouter.post(
+  '/:resourceId/maintenance',
+  validateResourceIdParam,
+  validateCreateMaintenanceBlock,
+  createMaintenanceBlock,
+);
+
+/**
+ * GET /api/v1/admin/resources/:resourceId/maintenance
+ * Retrieve paginated maintenance blocks for a resource.
+ */
+adminResourceRouter.get(
+  '/:resourceId/maintenance',
+  validateResourceIdParam,
+  validateListMaintenanceQuery,
+  listMaintenanceBlocks,
+);
+
+/**
+ * DELETE /api/v1/admin/resources/:resourceId/maintenance/:maintenanceId
+ * Scoped route to delete a maintenance block for a resource.
+ */
+adminResourceRouter.delete(
+  '/:resourceId/maintenance/:maintenanceId',
+  validateResourceIdParam,
+  validateMaintenanceIdParam,
+  deleteMaintenanceBlock,
+);
 
 export default adminResourceRouter;

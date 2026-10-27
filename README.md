@@ -65,9 +65,11 @@ server/                     Express backend workspace
       database.js           Mongoose connection pooling, lifecycle logging, state diagnostics, and memoization
       env.js                Centralized environment loader with schema validation
     controllers/            HTTP request/response controllers
+      adminBooking.controller.js Administrative booking query and cancellation handlers
       auth.controller.js    User registration, login, logout, and profile handlers
-      booking.controller.js Authenticated reservation creation and atomic allocation handler
+      booking.controller.js Authenticated reservation creation and user lifecycle handlers
       health.controller.js  Service liveness and database readiness diagnostic handler
+      maintenance.controller.js Administrative resource maintenance blackout handlers
       resource.controller.js Public resource discovery and administrative management handlers
     middleware/             Cross-cutting HTTP middleware
       authenticate.js       JWT verification from HTTP-only cookie or Bearer header
@@ -83,26 +85,31 @@ server/                     Express backend workspace
       ResourceSlot.js       Atomic slot allocation model with compound unique index (resourceId, slotStartAt)
       User.js               User identity model with bcrypt hashing and safe serialization
     routes/                 Express route handlers
-      adminResource.routes.js Administrative resource management routes (/admin/resources)
+      adminBooking.routes.js Administrative booking inspection and cancellation routes (/admin/bookings)
+      adminMaintenance.routes.js Administrative maintenance deletion routes (/admin/maintenance)
+      adminResource.routes.js Administrative resource and maintenance routes (/admin/resources)
       auth.routes.js        Authentication routes (/register, /login, /logout, /me)
       booking.routes.js     Authenticated reservation creation routes (/bookings)
       health.routes.js      Health check route handler
-      index.js              Master API v1 router mounting /health, /auth, /resources, /admin/resources, /bookings
+      index.js              Master API v1 router mounting /health, /auth, /resources, /admin/resources, /admin/bookings, /admin/maintenance, /bookings
       resource.routes.js    Public and admin resource routes (/resources)
     services/               Business and domain services
       auth.service.js       Token issuance/verification, cookie management, credentials verification
       availability.service.js Availability engine (candidate slot generation, past time, maintenance & booking exclusions)
-      booking.service.js    Reservation creation domain service orchestrating atomic allocation
+      booking.service.js    Reservation creation, lifecycle, and administrative management service
       bookingAllocation.service.js Slot-alignment validation, atomic multi-slot allocation primitives, and transaction management
+      maintenance.service.js Administrative maintenance blackout CRUD and overlap conflict detection service
       resource.service.js   Resource CRUD, regex-safe search, category/capacity filters, pagination
     utils/                  Shared backend utilities
       ApiError.js           Structured operational HTTP error class with status and error codes
       apiResponse.js        Standardized JSON response envelope helpers (sendSuccess, sendError)
       asyncHandler.js       Async controller error forwarder for Express
     validators/             Input validation primitives and schema helpers
+      adminBooking.validator.js Administrative booking query and cancellation validation
       auth.validator.js     Registration and login validation with mass-assignment defense
       booking.validator.js  Reservation creation validation with ISO 8601 instant parsing and mass-assignment defense
       common.js             Reusable validation primitives (ObjectIds, emails, ISO dates, intervals, pagination)
+      maintenance.validator.js Maintenance blackout interval validation and query filtering
       resource.validator.js Resource creation, update, status, and query parameter validation
     app.js                  Express application setup (CORS, security headers, cookie parsing, middleware, routes)
     server.js               Process entry point (database connection, HTTP listening, graceful shutdown)
@@ -302,6 +309,23 @@ Key Lifecycle Invariants:
 4. **Rescheduling Reallocation:** Rechecks operating hours, slot alignment, maintenance blackouts, and concurrent booking conflicts while accounting for the booking's own allocations. Deletes old slots and inserts new slots atomically. If reallocation fails, the entire transaction is rolled back, leaving the original booking and original slots completely untouched.
 5. **Same-Time Rescheduling:** Reschedule requests with start and end timestamps identical to the existing reservation return `200 OK` idempotently without releasing or reallocating slots.
 
+### 11. Admin Booking Management, Resource Maintenance, and Operational Controls (Prompt 11)
+
+Implements protected administrative workflows for reviewing system-wide bookings, managing resource maintenance blackouts, and executing controlled administrative booking cancellations:
+
+Endpoints:
+- `GET /api/v1/admin/bookings` — Paginated booking list across all users with deterministic sorting (`startAt: -1, _id: -1`), composable filters (`status`, `resourceId`, `userId`, `category`, `fromDate`, `toDate`), safe populated user and resource profiles, and security field exclusion.
+- `PATCH /api/v1/admin/bookings/:bookingId/cancel` — Controlled administrative cancellation of a confirmed booking. Enforces status transition policies, records audit metadata (`cancelledBy`, `cancelledAt`, `cancellationReason`), and executes atomic `ResourceSlot` release inside a MongoDB transaction.
+- `POST /api/v1/admin/resources/:resourceId/maintenance` — Schedules a resource maintenance blackout period on half-open interval `[startAt, endAt)`. Enforces conflict detection against existing maintenance blocks (`MAINTENANCE_OVERLAP_CONFLICT`) and confirmed bookings (`MAINTENANCE_BOOKING_CONFLICT`), preventing silent cancellation of user reservations.
+- `GET /api/v1/admin/resources/:resourceId/maintenance` — Paginated maintenance blocks for a resource sorted chronologically with date-range filters.
+- `DELETE /api/v1/admin/maintenance/:maintenanceId` — Deletes a maintenance block, immediately re-enabling slot availability for the resource without affecting existing bookings.
+
+Key Administrative Invariants:
+1. **Strict Role Authorization:** All administrative endpoints require `authenticate` and `requireRole('admin')`. User input in request bodies or query parameters cannot grant administrative privileges.
+2. **Maintenance Conflict Protection:** Before creating a maintenance block, the service verifies half-open interval overlap with confirmed bookings (`existing.startAt < maintenance.endAt && existing.endAt > maintenance.startAt`). Conflicting bookings reject maintenance creation with `409 Conflict` (`MAINTENANCE_BOOKING_CONFLICT`), requiring explicit administrative resolution.
+3. **Availability Engine Integration:** Maintenance blocks are queried in `calculateResourceAvailability()`, excluding blocked intervals with `reason: "MAINTENANCE"`. Deleting a maintenance block restores bookable slots automatically when within operating hours and unreserved.
+4. **Audit Traceability:** Preserves historical `Booking` records with administrative actor tracking (`cancelledBy` ref User, `cancelledAt`, `cancellationReason`) and maintenance attribution (`createdBy` ref User).
+
 ---
 
 ## Client Setup and Development
@@ -326,14 +350,14 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–10 (Full-Stack Foundation, Auth, Resources, Availability & Concurrency-Safe Booking Lifecycle Complete)
+### Implemented in Prompts 1–11 (Full-Stack Foundation, Auth, Resources, Availability, Booking Lifecycle & Admin Operations Complete)
 - **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client configured with `credentials: 'include'`.
 - **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, cookie parsing (`cookie-parser`), body parsing, request logging, and configurable CORS origin policy.
 - **Database Management:** Robust MongoDB connection management (`connectDatabase`, `disconnectDatabase`, `getDatabaseState`) with URI credential masking, connection lifecycle event logging, and concurrent connection memoization.
 - **Process Lifecycle:** Process entry point (`src/server.js`) with startup verification and graceful shutdown handlers for `SIGINT` and `SIGTERM`.
 - **Standardized API Conventions:** Master router mounting `/api/v1`, standardized JSON envelopes (`{ success, message, data, code }`), and structured operational errors via `ApiError`.
 - **Error Handling & Sanitization:** Centralized error handler (`errorHandler.js`) with Mongoose validation, CastError, duplicate key (email & slot conflict), and CORS error normalization.
-- **Validation Infrastructure:** Extensible request validation middleware (`validate.js`) with reusable validation helpers (`validators/common.js`, `validators/auth.validator.js`, `validators/resource.validator.js`, and `validators/booking.validator.js`).
+- **Validation Infrastructure:** Extensible request validation middleware (`validate.js`) with reusable validation helpers (`validators/common.js`, `validators/auth.validator.js`, `validators/resource.validator.js`, `validators/booking.validator.js`, `validators/adminBooking.validator.js`, and `validators/maintenance.validator.js`).
 - **Authentication & Security:** User model (`models/User.js`) with normalized lowercase email, bcrypt hashing, `comparePassword`, and `toSafeObject` sanitization. Public registration with automatic session creation, login with user-enumeration defense, logout with cookie expiration, and `GET /api/v1/auth/me`.
 - **Authorization Infrastructure:** `authenticate` and `requireRole` middleware ensuring that client-provided roles are never trusted and server-side roles dictate access to privileged routes.
 - **Resource Management & Discovery:** Resource model (`models/Resource.js`) supporting room and equipment categories, capacity constraints, validated slot durations, and weekly operating hours with closing-time validation. Public search/discovery with regex escaping and pagination metadata. Complete administrator inventory, creation, partial updates, and status activation/deactivation.
@@ -341,8 +365,8 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **Concurrency-Safe Slot Allocation Primitives:** `Booking` & `ResourceSlot` models with unique compound index `{ resourceId: 1, slotStartAt: 1 }`. Service primitives for slot alignment validation, atomic multi-slot allocation transactions, safe conflict translation (`BOOKING_CONFLICT`), and deployment prerequisite validation (`TRANSACTIONS_UNAVAILABLE`).
 - **Authenticated Booking Creation Workflow:** `POST /api/v1/bookings` protected by `authenticate` middleware. Rigorous validation of ISO 8601 instant timestamps, future time, 90-day booking window, and mass assignment rejection. Multi-document transactional allocation creating `Booking` and `ResourceSlot` records atomically, with database-level uniqueness enforcement `{ resourceId: 1, slotStartAt: 1 }` raising `409 Conflict` (`BOOKING_CONFLICT`), and safe failure on standalone topologies (`TRANSACTIONS_UNAVAILABLE`).
 - **Booking Management Lifecycle:** User booking history (`GET /api/v1/bookings/my`), detail view (`GET /api/v1/bookings/:bookingId`), atomic cancellation (`PATCH /api/v1/bookings/:bookingId/cancel`), and atomic rescheduling (`PATCH /api/v1/bookings/:bookingId/reschedule`). Enforces ownership, policy checks (future confirmed only), slot release/reallocation atomicity, and idempotent same-time rescheduling.
+- **Administrative Booking & Maintenance Operations:** System-wide booking review with multi-field composable filtering (`GET /api/v1/admin/bookings`), transactional administrative booking cancellation (`PATCH /api/v1/admin/bookings/:bookingId/cancel`), resource maintenance blackout creation with confirmed-booking overlap protection (`POST /api/v1/admin/resources/:resourceId/maintenance`), maintenance listing (`GET /api/v1/admin/resources/:resourceId/maintenance`), and maintenance deletion (`DELETE /api/v1/admin/maintenance/:maintenanceId`).
 - **Diagnostic Health Endpoint:** Live `GET /api/v1/health` distinguishing process liveness from database readiness.
 
 ### Planned for Future Prompts
-- **Prompt 11:** Administrator maintenance blackout periods, inventory analytics, and audit logs.
 - **Prompt 12+:** Frontend reservation interfaces, booking management screens, and administrative dashboards.

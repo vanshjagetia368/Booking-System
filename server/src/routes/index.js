@@ -3,6 +3,8 @@ import healthRouter from './health.routes.js';
 import authRouter from './auth.routes.js';
 import resourceRouter from './resource.routes.js';
 import adminResourceRouter from './adminResource.routes.js';
+import adminBookingRouter from './adminBooking.routes.js';
+import adminMaintenanceRouter from './adminMaintenance.routes.js';
 import bookingRouter from './booking.routes.js';
 
 const apiRouter = Router();
@@ -30,6 +32,18 @@ apiRouter.use('/resources', resourceRouter);
  * Mounts: /api/v1/admin/resources
  */
 apiRouter.use('/admin/resources', adminResourceRouter);
+
+/**
+ * Administrative Booking Management Routes
+ * Mounts: /api/v1/admin/bookings
+ */
+apiRouter.use('/admin/bookings', adminBookingRouter);
+
+/**
+ * Administrative Maintenance Management Routes
+ * Mounts: /api/v1/admin/maintenance
+ */
+apiRouter.use('/admin/maintenance', adminMaintenanceRouter);
 
 /**
  * Booking Creation & Reservation Management Routes
