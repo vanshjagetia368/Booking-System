@@ -2,8 +2,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES } from './routes.js';
 import AppLayout from '../components/layout/AppLayout.jsx';
 import FeaturePlaceholder from '../components/layout/FeaturePlaceholder.jsx';
-import HomePage from '../features/resources/pages/HomePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import {
+  ResourceDiscoveryPage,
+  ResourceDetailPage,
+} from '../features/resources/index.js';
 import {
   LoginPage,
   RegisterPage,
@@ -21,44 +24,13 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        {/* Public Landing Overview */}
-        <Route path={ROUTES.HOME} element={<HomePage />} />
+        {/* Public Resource Discovery & Catalog */}
+        <Route path={ROUTES.HOME} element={<ResourceDiscoveryPage />} />
+        <Route path={ROUTES.RESOURCES} element={<ResourceDiscoveryPage />} />
 
-        {/* Public Resource Discovery & Catalog (Prompt 15) */}
-        <Route
-          path={ROUTES.RESOURCES}
-          element={
-            <FeaturePlaceholder
-              title="Resource Discovery & Catalog"
-              promptStage="Prompt 15/22: Resource Discovery, Search & Catalog Filtering"
-              description="Browse active study rooms, conference spaces, and laboratory instruments with category and capacity filtering."
-              plannedCapabilities={[
-                'Search and filter by category (study-room, meeting-room, lab-equipment, other)',
-                'Filter by capacity range (minCapacity, maxCapacity) and location keyword',
-                'Status indicators for active bookable resources',
-                'URL query string synchronization for shareable search states',
-              ]}
-            />
-          }
-        />
+        {/* Public Resource Details & Availability Calendar */}
+        <Route path={ROUTES.RESOURCE_DETAILS(':resourceId')} element={<ResourceDetailPage />} />
 
-        {/* Public Resource Details & Availability (Prompt 16) */}
-        <Route
-          path={ROUTES.RESOURCE_DETAILS(':resourceId')}
-          element={
-            <FeaturePlaceholder
-              title="Resource Details & Availability Calendar"
-              promptStage="Prompt 16/22: Resource Details, Operating Hours & Availability Calendar"
-              description="Inspect specifications, operating hours, and bookable time slots on an interactive calendar."
-              plannedCapabilities={[
-                'Detailed specifications, equipment inventory, and operating schedules',
-                'Calendar date selection with real-time slot generation',
-                'Half-open [startAt, endAt) time interval slot selection',
-                'Exclusion of past times, maintenance blackouts, and confirmed reservations',
-              ]}
-            />
-          }
-        />
 
         {/* Authentication Routes */}
         <Route path={ROUTES.LOGIN} element={<LoginPage />} />

@@ -10,6 +10,8 @@ import Alert from '../../../components/ui/Alert.jsx';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../../components/ui/Card.jsx';
 import PageHeader from '../../../components/ui/PageHeader.jsx';
 import EmptyState from '../../../components/ui/EmptyState.jsx';
+import { FormField, Input, Select, Textarea } from '../../../components/forms/index.js';
+import { LoadingState, ErrorState, Modal } from '../../../components/feedback/index.js';
 
 /**
  * Main Application Home / Landing Overview
@@ -21,8 +23,15 @@ import EmptyState from '../../../components/ui/EmptyState.jsx';
 export default function HomePage() {
   // Interactive UI Demo States
   const [buttonsLoading, setButtonsLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
   const [apiTestMessage, setApiTestMessage] = useState(null);
+
+  // Form Demo State
+  const [demoInput, setDemoInput] = useState('');
+  const [demoCategory, setDemoCategory] = useState('');
+  const [demoNotes, setDemoNotes] = useState('');
+  const [showFormError, setShowFormError] = useState(false);
 
   const handleTestApi = async () => {
     setApiTestStatus('loading');
@@ -55,7 +64,7 @@ export default function HomePage() {
     {
       title: 'Resource Discovery',
       path: ROUTES.RESOURCES,
-      stage: 'Prompt 4',
+      stage: 'Prompt 15',
       badgeVariant: 'primary',
       description:
         'Browse and filter active campus resources including study rooms, lecture halls, and lab equipment.',
@@ -63,7 +72,7 @@ export default function HomePage() {
     {
       title: 'Resource Details & Slots',
       path: ROUTES.RESOURCE_DETAILS('demo-lab-101'),
-      stage: 'Prompt 5',
+      stage: 'Prompt 16',
       badgeVariant: 'primary',
       description:
         'Inspect equipment specs, view bookable hours, and check interval availability.',
@@ -71,23 +80,23 @@ export default function HomePage() {
     {
       title: 'Authentication & Security',
       path: ROUTES.LOGIN,
-      stage: 'Prompt 3',
+      stage: 'Prompt 14',
       badgeVariant: 'warning',
       description:
         'Secure user registration, credential validation, session handling, and role permissions.',
     },
     {
       title: 'Personal Bookings',
-      path: ROUTES.MY_BOOKINGS,
-      stage: 'Prompt 6',
+      path: ROUTES.BOOKINGS,
+      stage: 'Prompt 18',
       badgeVariant: 'success',
       description:
         'Track upcoming reservations, inspect past bookings, reschedule times, or cancel slots.',
     },
     {
-      title: 'Booking Confirmation',
+      title: 'Booking Details',
       path: ROUTES.BOOKING_DETAILS('demo-res-001'),
-      stage: 'Prompt 6',
+      stage: 'Prompt 18',
       badgeVariant: 'success',
       description:
         'Review reservation summaries, confirmation identifiers, and schedule details.',
@@ -95,7 +104,7 @@ export default function HomePage() {
     {
       title: 'Administrator Portal',
       path: ROUTES.ADMIN_DASHBOARD,
-      stage: 'Prompt 7',
+      stage: 'Prompt 20',
       badgeVariant: 'danger',
       description:
         'Manage resource inventory, operating schedules, maintenance blackouts, and system metrics.',
@@ -108,7 +117,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero__eyebrow">
           <Badge variant="primary" size="md">
-            Full-Stack Foundation Complete
+            Full-Stack Backend Integrated &bull; Frontend Foundation Complete
           </Badge>
           <span className="hero__stage-text">React 19 &bull; Vite 6 &bull; Express 5 &bull; MongoDB / Mongoose 8</span>
         </div>
@@ -127,7 +136,7 @@ export default function HomePage() {
           <Button as={Link} to={ROUTES.RESOURCES} variant="primary" size="lg">
             Explore Resource Catalog
           </Button>
-          <Button as={Link} to={ROUTES.MY_BOOKINGS} variant="outline" size="lg">
+          <Button as={Link} to={ROUTES.BOOKINGS} variant="outline" size="lg">
             View My Bookings
           </Button>
           <Button as={Link} to={ROUTES.ADMIN_DASHBOARD} variant="ghost" size="lg">
@@ -138,23 +147,18 @@ export default function HomePage() {
 
       {/* Architecture Alert */}
       <section className="home-alert-section">
-        <Alert
-          variant="info"
-          title="Full-Stack Foundation Active & Integrated"
-        >
-          The React client shell, centralized routing, semantic responsive layout,
-          UI primitive library, Express 5 backend architecture, MongoDB connection pooling,
-          and live /api/v1/health diagnostics are fully operational. Later prompts
-          will progressively implement authentication, inventory discovery, schedule availability,
-          and transactional booking flows.
+        <Alert variant="info" title="Architecture Milestones (Prompts 1–13)">
+          Backend APIs, schemas, transactional slot allocation, and documentation are complete (Prompts 1–12).
+          Prompt 13 establishes the React frontend foundation, application routing, shared layout, API client,
+          accessible form primitives, and global feedback states.
         </Alert>
       </section>
 
-      {/* Planned Feature Routes Directory */}
+      {/* Feature Domain Navigation */}
       <section className="features-section">
         <PageHeader
-          title="Application Route Navigation"
-          description="Explore the centralized route hierarchy established for the Smart Resource Booking System."
+          title="Application Navigation & Features"
+          description="Access the core functional modules planned across subsequent implementation prompts."
         />
 
         <div className="features-grid">
@@ -167,13 +171,11 @@ export default function HomePage() {
                   </Badge>
                 </div>
                 <CardTitle>{card.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
                 <CardDescription>{card.description}</CardDescription>
-              </CardContent>
+              </CardHeader>
               <CardFooter>
-                <Button as={Link} to={card.path} variant="secondary" size="sm">
-                  View Route Shell &rarr;
+                <Button as={Link} to={card.path} variant="outline" size="sm">
+                  Open View &rarr;
                 </Button>
               </CardFooter>
             </Card>
@@ -181,20 +183,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* UI Primitives & API Client Showcase */}
+      {/* Reusable UI Primitives Showcase */}
       <section className="showcase-section">
         <PageHeader
-          title="Reusable UI Foundation & API Layer Showcase"
-          description="Interactive verification of component primitives and error/state handling built for this foundation."
+          title="Shared UI Primitives & Design System"
+          description="Consistent, accessible, and responsive components built with vanilla CSS tokens and semantic HTML."
         />
 
         <div className="showcase-grid">
-          {/* Button Primitives */}
+          {/* Button Variants */}
           <Card>
             <CardHeader>
-              <CardTitle>Button Primitives & States</CardTitle>
+              <CardTitle>Button Primitives</CardTitle>
               <CardDescription>
-                Accessible buttons supporting variants, sizes, disabled, and loading states.
+                Accessible buttons supporting primary, secondary, outline, danger, ghost variants, and loading spinners.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -247,13 +249,104 @@ export default function HomePage() {
               <div className="showcase-group">
                 <div className="showcase-row">
                   <Badge variant="success">Confirmed</Badge>
-                  <Badge variant="warning">Pending Review</Badge>
+                  <Badge variant="warning">In Maintenance</Badge>
                   <Badge variant="danger">Cancelled</Badge>
                   <Badge variant="primary">Active</Badge>
                   <Badge variant="neutral">Completed</Badge>
                   <Badge variant="default">Study Room</Badge>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Form Controls Demo */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Form Controls & Fields</CardTitle>
+              <CardDescription>
+                Accessible form primitives with associated labels, validation error states, and helper hints.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="showcase-group">
+                <FormField
+                  id="demo-resource-name"
+                  label="Facility Name"
+                  required
+                  helperText="Enter the name of the campus room or lab."
+                  error={showFormError ? 'Facility name is required.' : null}
+                >
+                  <Input
+                    id="demo-resource-name"
+                    placeholder="e.g. Science Library Room 302"
+                    value={demoInput}
+                    onChange={(e) => setDemoInput(e.target.value)}
+                    hasError={showFormError}
+                  />
+                </FormField>
+
+                <FormField
+                  id="demo-category"
+                  label="Category"
+                  required
+                  helperText="Choose the asset category."
+                >
+                  <Select
+                    id="demo-category"
+                    placeholder="Select a category..."
+                    value={demoCategory}
+                    onChange={(e) => setDemoCategory(e.target.value)}
+                    options={[
+                      { value: 'study-room', label: 'Study Room' },
+                      { value: 'meeting-room', label: 'Meeting Room' },
+                      { value: 'lab-equipment', label: 'Laboratory Equipment' },
+                      { value: 'other', label: 'Other Facility' },
+                    ]}
+                  />
+                </FormField>
+
+                <FormField
+                  id="demo-notes"
+                  label="Booking Notes"
+                  helperText="Optional reservation instructions."
+                >
+                  <Textarea
+                    id="demo-notes"
+                    placeholder="State any specific requirements or setup needed..."
+                    value={demoNotes}
+                    onChange={(e) => setDemoNotes(e.target.value)}
+                    rows={2}
+                  />
+                </FormField>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFormError(!showFormError)}
+              >
+                {showFormError ? 'Clear Form Validation Error' : 'Trigger Validation Error State'}
+              </Button>
+            </CardFooter>
+          </Card>
+
+          {/* Feedback & Confirmation Modal */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Confirmation Modal Dialog</CardTitle>
+              <CardDescription>
+                Accessible modal dialog with backdrop blur, focus trapping, and Escape key dismissal.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="showcase-note">
+                Modal dialogs implement WAI-ARIA modal guidelines, including background scroll locking
+                and keyboard navigation.
+              </p>
+              <Button variant="secondary" onClick={() => setIsModalOpen(true)}>
+                Open Confirmation Dialog
+              </Button>
             </CardContent>
           </Card>
 
@@ -298,9 +391,7 @@ export default function HomePage() {
 
               {apiTestStatus === 'loading' && (
                 <div className="api-test-loading">
-                  <Alert variant="info" title="Connecting...">
-                    Sending HTTP request to <code>{config.apiBaseUrl}/health</code>...
-                  </Alert>
+                  <LoadingState message="Connecting to Express backend API..." />
                 </div>
               )}
 
@@ -311,12 +402,12 @@ export default function HomePage() {
               )}
 
               {apiTestStatus === 'error' && (
-                <Alert variant="error" title="Backend Not Reachable">
-                  <p>{apiTestMessage}</p>
-                  <p className="text-subtle">
-                    Tip: Run <code>npm run dev:server</code> in a terminal to launch the Express API.
-                  </p>
-                </Alert>
+                <ErrorState
+                  title="Backend Not Reachable"
+                  message={apiTestMessage}
+                  onRetry={handleTestApi}
+                  retryLabel="Retry Connection"
+                />
               )}
             </CardContent>
             <CardFooter>
@@ -352,6 +443,31 @@ export default function HomePage() {
           </Card>
         </div>
       </section>
+
+      {/* Confirmation Modal Instance */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Confirm Reservation Cancellation"
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+              Keep Reservation
+            </Button>
+            <Button variant="danger" onClick={() => setIsModalOpen(false)}>
+              Cancel Booking
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Are you sure you want to cancel your confirmed booking for <strong>Science Library Study Room 302</strong> on <strong>October 29, 2026 [10:00 – 11:30)</strong>?
+        </p>
+        <p className="text-subtle" style={{ marginTop: '0.75rem' }}>
+          This will release your allocated slots immediately for other students while preserving a permanent historical cancellation audit record.
+        </p>
+      </Modal>
     </div>
   );
 }
