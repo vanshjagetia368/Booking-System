@@ -1,4 +1,5 @@
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import express from 'express';
 import { env } from './config/env.js';
 import requestLogger from './middleware/logger.js';
@@ -57,9 +58,10 @@ export function createApp() {
     }),
   );
 
-  // 3. Request body parsing
+  // 3. Request body and cookie parsing
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  app.use(cookieParser());
 
   // 4. Request logging (excluding sensitive payloads/tokens)
   if (!env.isTest) {

@@ -77,6 +77,7 @@ export async function apiRequest(endpoint, options = {}) {
   let response;
   try {
     response = await fetch(url, {
+      credentials: 'include',
       ...customOptions,
       headers: requestHeaders,
       body: formattedBody,
