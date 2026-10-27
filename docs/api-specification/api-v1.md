@@ -301,16 +301,242 @@ Protected endpoints can enforce role restrictions using `requireRole(...roles)`:
 
 ---
 
+## Resource Discovery & Management Endpoints (Prompt 6)
+
+The Resource module manages physical bookable shared campus facilities and equipment (study rooms, meeting rooms, laboratories, and specialized gear).
+
+### Resource Model & Semantics
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | String | MongoDB ObjectId | Unique resource identifier. |
+| `name` | String | Required, 2–100 chars, trimmed | Name of the facility or resource. |
+| `description` | String | Max 1000 chars, trimmed | Optional description or usage instructions. |
+| `category` | String | Enum: `study-room`, `meeting-room`, `lab-equipment`, `other` | Standardized category taxonomy. |
+| `location` | String | Required, 2–100 chars, trimmed | Facility location (building, floor, room number). |
+| `capacity` | Integer | Required, 1–1000 | Max seated occupants (rooms) or concurrent operator limit (equipment). |
+| `slotDurationMinutes` | Integer | Required, 15–480, multiple of 15, default `30` | Minimum bookable time-block duration. |
+| `operatingHours` | Object | 7 days (`monday` to `sunday`) | Daily schedule specifying `isOpen`, `openTime` (HH:mm), `closeTime` (HH:mm). |
+| `status` | String | Enum: `active`, `inactive`, default `active` | Lifecycle status. Public discovery only exposes `active` resources. |
+| `createdAt` | ISO 8601 | Auto-managed timestamp | Creation date/time. |
+| `updatedAt` | ISO 8601 | Auto-managed timestamp | Last modification date/time. |
+
+#### Operating Hours Format
+Operating hours are configured on a per-day basis using 24-hour time strings (`HH:mm`) evaluated in local facility time:
+```json
+{
+  "monday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+  "tuesday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+  "wednesday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+  "thursday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+  "friday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+  "saturday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+  "sunday": { "isOpen": false, "openTime": "09:00", "closeTime": "17:00" }
+}
+```
+*Invariants:* When `isOpen: true`, both `openTime` and `closeTime` must be in valid `HH:mm` format and `openTime < closeTime`. When `isOpen: false`, the resource is closed without creating bookable intervals.
+
+---
+
+### 1. List Active Resources (Public Discovery)
+
+`GET /api/v1/resources`
+
+Returns a paginated list of active resources matching optional query filters. Inactive resources are strictly excluded.
+
+- **Access:** Public
+- **Query Parameters:**
+  - `page` (Integer, default `1`): Current page number.
+  - `limit` (Integer, default `10`, max `100`): Results per page.
+  - `search` (String, max 100 chars): Case-insensitive search on `name`, `description`, and `location` (regex characters are safely escaped).
+  - `category` (String): Must match one of `study-room`, `meeting-room`, `lab-equipment`, `other`.
+  - `location` (String, max 100 chars): Substring match on location.
+  - `minCapacity` (Integer >= 1): Minimum capacity filter.
+  - `maxCapacity` (Integer >= 1): Maximum capacity filter (`minCapacity <= maxCapacity`).
+  - `sortBy` (String, default `createdAt`): `createdAt`, `name`, `capacity`, `slotDurationMinutes`, `category`.
+  - `sortOrder` (String, default `desc`): `asc` or `desc`.
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Active resources retrieved successfully.",
+  "data": {
+    "resources": [
+      {
+        "id": "671e482bf66895768659d9f1",
+        "name": "Collaborative Study Suite A",
+        "description": "Equipped with whiteboard and dual monitors.",
+        "category": "study-room",
+        "location": "Main Library, 2nd Floor, Room 204",
+        "capacity": 6,
+        "slotDurationMinutes": 30,
+        "operatingHours": {
+          "monday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+          "tuesday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+          "wednesday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+          "thursday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+          "friday": { "isOpen": true, "openTime": "08:00", "closeTime": "20:00" },
+          "saturday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+          "sunday": { "isOpen": false, "openTime": "09:00", "closeTime": "17:00" }
+        },
+        "status": "active",
+        "createdAt": "2026-10-27T11:00:00.000Z",
+        "updatedAt": "2026-10-27T11:00:00.000Z"
+      }
+    ]
+  },
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "totalItems": 1,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPrevPage": false
+  }
+}
+```
+
+---
+
+### 2. Get Public Resource Details
+
+`GET /api/v1/resources/:resourceId`
+
+Retrieves details for a single active resource. Inactive resources return `404 Not Found`.
+
+- **Access:** Public
+- **Success Status:** `200 OK`
+- **Error Status:** `404 Not Found` (`RESOURCE_NOT_FOUND`) if nonexistent or inactive.
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Resource retrieved successfully.",
+  "data": {
+    "resource": {
+      "id": "671e482bf66895768659d9f1",
+      "name": "Collaborative Study Suite A",
+      "description": "Equipped with whiteboard and dual monitors.",
+      "category": "study-room",
+      "location": "Main Library, 2nd Floor, Room 204",
+      "capacity": 6,
+      "slotDurationMinutes": 30,
+      "operatingHours": { ... },
+      "status": "active",
+      "createdAt": "2026-10-27T11:00:00.000Z",
+      "updatedAt": "2026-10-27T11:00:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+### 3. Create Resource (Admin Only)
+
+`POST /api/v1/resources`
+
+Creates a new facility or equipment resource.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Success Status:** `201 Created`
+- **Mass-Assignment Defense:** Strictly rejects non-whitelisted fields (e.g. `_id`, `createdAt`).
+
+#### Request Body
+```json
+{
+  "name": "Advanced Optics Laboratory Microscope A",
+  "description": "High-magnification confocal fluorescence microscope.",
+  "category": "lab-equipment",
+  "location": "Science Complex, Basement Lab B-12",
+  "capacity": 2,
+  "slotDurationMinutes": 60,
+  "operatingHours": {
+    "monday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+    "tuesday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+    "wednesday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+    "thursday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+    "friday": { "isOpen": true, "openTime": "09:00", "closeTime": "17:00" },
+    "saturday": { "isOpen": false, "openTime": "09:00", "closeTime": "17:00" },
+    "sunday": { "isOpen": false, "openTime": "09:00", "closeTime": "17:00" }
+  },
+  "status": "active"
+}
+```
+
+---
+
+### 4. Update Resource (Admin Only)
+
+`PATCH /api/v1/resources/:resourceId`
+
+Performs a partial update on permitted resource fields. Revalidates final configuration against all schema and business rules.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Success Status:** `200 OK`
+
+#### Request Body (Example Partial Update)
+```json
+{
+  "capacity": 8,
+  "description": "Updated room description with added audiovisual equipment."
+}
+```
+
+---
+
+### 5. Change Resource Status (Admin Only)
+
+`PATCH /api/v1/resources/:resourceId/status`
+
+Activates or deactivates a resource. Deactivation hides the resource from public discovery without deleting historical records or past booking relationships.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Success Status:** `200 OK`
+
+#### Request Body
+```json
+{
+  "status": "inactive"
+}
+```
+
+---
+
+### 6. Administrative Resource Inventory
+
+`GET /api/v1/admin/resources`
+
+Lists all resources (including inactive resources) with management filtering options.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Query Parameters:** All public discovery parameters plus `status` (`active`, `inactive`, `all`).
+
+---
+
+### 7. Administrative Resource Details
+
+`GET /api/v1/admin/resources/:resourceId`
+
+Retrieves full resource details for administration regardless of whether the resource is active or inactive.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Success Status:** `200 OK`
+
+---
+
 ## Planned API Groups (Upcoming Prompts)
 
 | Group | Namespace | Responsibilities | Target Prompt | Access |
 |---|---|---|---|---|
 | Health | `/api/v1/health` | Service liveness & database readiness | **Implemented (Prompt 3)** | Public |
 | Authentication | `/api/v1/auth` | Registration, sign-in, session profile, sign-out | **Implemented (Prompt 5)** | Public (sign-in/reg) / Authenticated (profile) |
-| Resources | `/api/v1/resources` | Resource discovery, catalog search, details | Prompt 6 | Public reads / Admin writes |
-| Availability | `/api/v1/resources/:id/availability` | Query bookable slots on `[start, end)` intervals | Prompt 6 | Public / Authenticated reads |
+| Resources | `/api/v1/resources` & `/api/v1/admin/resources` | Resource discovery, catalog search, admin management | **Implemented (Prompt 6)** | Public reads / Admin writes & management |
+| Availability | `/api/v1/resources/:id/availability` | Query bookable slots on `[start, end)` intervals | Prompt 7 | Public / Authenticated reads |
 | Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 7 | Authenticated (ownership enforced) |
-| Administration | `/api/v1/admin` | Resource inventory, maintenance blackouts, audit | Prompt 8 | Administrator |
+| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 8 | Administrator |
 
 ---
 
@@ -319,4 +545,5 @@ Protected endpoints can enforce role restrictions using `requireRole(...roles)`:
 Create and reschedule operations in Prompt 7 must validate the interval, resource status, operating schedule, maintenance blocks, and slot alignment on the server. Conflicts must be rejected atomically even under high concurrent load.
 
 The booking implementation is planned around fixed-duration `ResourceSlots` protected by a unique compound index on `(resourceId, slotStartAt)` and MongoDB transactions. Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions.
+
 

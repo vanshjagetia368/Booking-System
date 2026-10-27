@@ -67,6 +67,7 @@ server/                     Express backend workspace
     controllers/            HTTP request/response controllers
       auth.controller.js    User registration, login, logout, and profile handlers
       health.controller.js  Service liveness and database readiness diagnostic handler
+      resource.controller.js Public resource discovery and administrative management handlers
     middleware/             Cross-cutting HTTP middleware
       authenticate.js       JWT verification from HTTP-only cookie or Bearer header
       errorHandler.js       Centralized error handler (sanitizes Mongoose/Mongo errors, excludes production stacks)
@@ -75,13 +76,17 @@ server/                     Express backend workspace
       requireRole.js        Role-based route authorization middleware (e.g. requireRole('admin'))
       validate.js           Request schema validation middleware generator
     models/                 Mongoose schemas and indexes
+      Resource.js           Physical resource model (categories, capacity, slot duration, operating hours)
       User.js               User identity model with bcrypt hashing and safe serialization
     routes/                 Express route handlers
+      adminResource.routes.js Administrative resource management routes (/admin/resources)
       auth.routes.js        Authentication routes (/register, /login, /logout, /me)
       health.routes.js      Health check route handler
-      index.js              Master API v1 router mounting /health and /auth
+      index.js              Master API v1 router mounting /health, /auth, /resources, /admin/resources
+      resource.routes.js    Public and admin resource routes (/resources)
     services/               Business and domain services
       auth.service.js       Token issuance/verification, cookie management, credentials verification
+      resource.service.js   Resource CRUD, regex-safe search, category/capacity filters, pagination
     utils/                  Shared backend utilities
       ApiError.js           Structured operational HTTP error class with status and error codes
       apiResponse.js        Standardized JSON response envelope helpers (sendSuccess, sendError)
@@ -89,6 +94,7 @@ server/                     Express backend workspace
     validators/             Input validation primitives and schema helpers
       auth.validator.js     Registration and login validation with mass-assignment defense
       common.js             Reusable validation primitives (ObjectIds, emails, ISO dates, intervals, pagination)
+      resource.validator.js Resource creation, update, status, and query parameter validation
     app.js                  Express application setup (CORS, security headers, cookie parsing, middleware, routes)
     server.js               Process entry point (database connection, HTTP listening, graceful shutdown)
   .env.example              Template for backend environment variables
@@ -209,6 +215,21 @@ Middleware:
 - `authenticate`: Extracts and validates JWT from HTTP-only cookie or `Authorization: Bearer <token>` header, verifies user active status in MongoDB, and attaches sanitized `req.user` (`id`, `name`, `email`, `role`, `status`) and `req.userId`.
 - `requireRole(...roles)`: Enforces role permissions (e.g. `requireRole('admin')`), returning `403 Forbidden` (`INSUFFICIENT_PERMISSIONS`) if the user lacks the role.
 
+### 6. Resource Discovery & Administrative Management (Prompt 6)
+
+The system supports public browsing of active campus facilities and equipment alongside administrative catalog lifecycle oversight:
+
+Public Endpoints:
+- `GET /api/v1/resources` — Paginated catalog discovery with search across name/description/location, category filters (`study-room`, `meeting-room`, `lab-equipment`, `other`), location filter, and capacity range filters (`minCapacity`, `maxCapacity`). Strictly excludes inactive resources.
+- `GET /api/v1/resources/:resourceId` — Detailed view of an active resource. Returns `404 Not Found` for nonexistent or inactive resources.
+
+Administrative Endpoints (require `authenticate` + `requireRole('admin')`):
+- `POST /api/v1/resources` — Create a new resource with category, capacity, slot duration (multiple of 15 min), and daily operating hours.
+- `PATCH /api/v1/resources/:resourceId` — Partial update of permitted resource fields with revalidation.
+- `PATCH /api/v1/resources/:resourceId/status` — Activate or deactivate a resource. Deactivating hides it from public discovery while preserving historical records and past bookings.
+- `GET /api/v1/admin/resources` — Administrative resource inventory listing both active and inactive resources with status filtering.
+- `GET /api/v1/admin/resources/:resourceId` — Administrative resource inspection by ID regardless of status.
+
 ---
 
 ## Client Setup and Development
@@ -233,19 +254,19 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–5 (Full-Stack Foundation & Auth Complete)
+### Implemented in Prompts 1–6 (Full-Stack Foundation, Auth & Resources Complete)
 - **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client configured with `credentials: 'include'`.
 - **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, cookie parsing (`cookie-parser`), body parsing, request logging, and configurable CORS origin policy.
 - **Database Management:** Robust MongoDB connection management (`connectDatabase`, `disconnectDatabase`, `getDatabaseState`) with URI credential masking, connection lifecycle event logging, and concurrent connection memoization.
 - **Process Lifecycle:** Process entry point (`src/server.js`) with startup verification and graceful shutdown handlers for `SIGINT` and `SIGTERM`.
 - **Standardized API Conventions:** Master router mounting `/api/v1`, standardized JSON envelopes (`{ success, message, data, code }`), and structured operational errors via `ApiError`.
 - **Error Handling & Sanitization:** Centralized error handler (`errorHandler.js`) with Mongoose validation, CastError, duplicate key (email conflict), and CORS error normalization.
-- **Validation Infrastructure:** Extensible request validation middleware (`validate.js`) with reusable validation helpers (`validators/common.js` and `validators/auth.validator.js`) protecting against mass assignment.
+- **Validation Infrastructure:** Extensible request validation middleware (`validate.js`) with reusable validation helpers (`validators/common.js`, `validators/auth.validator.js`, and `validators/resource.validator.js`).
 - **Authentication & Security:** User model (`models/User.js`) with normalized lowercase email, bcrypt hashing, `comparePassword`, and `toSafeObject` sanitization. Public registration with automatic session creation, login with user-enumeration defense, logout with cookie expiration, and `GET /api/v1/auth/me`.
 - **Authorization Infrastructure:** `authenticate` and `requireRole` middleware ensuring that client-provided roles are never trusted and server-side roles dictate access to privileged routes.
+- **Resource Management & Discovery:** Resource model (`models/Resource.js`) supporting room and equipment categories, capacity constraints, validated slot durations, and weekly operating hours with closing-time validation. Public search/discovery with regex escaping and pagination metadata. Complete administrator inventory, creation, partial updates, and status activation/deactivation.
 - **Diagnostic Health Endpoint:** Live `GET /api/v1/health` distinguishing process liveness from database readiness.
 
 ### Planned for Future Prompts
-- **Prompt 6:** Resource catalog, category filtering, operating hours, and availability calendars.
-- **Prompt 7:** Concurrency-safe booking creation, fixed-duration slot allocations, rescheduling, and cancellations.
-- **Prompt 8:** Administrator inventory oversight, maintenance blackouts, and audit logs.
+- **Prompt 7:** Concurrency-safe booking creation, fixed-duration slot allocations, availability schedule querying, rescheduling, and cancellations.
+- **Prompt 8:** Administrator maintenance blackout periods, inventory analytics, and audit logs.
