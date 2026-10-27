@@ -85,7 +85,7 @@ export function calculateRequiredSlots(resource, startAt, endAt) {
   if (!schedule || !schedule.isOpen || !schedule.openTime || !schedule.closeTime) {
     throw ApiError.badRequest(
       `Resource is closed on ${dayOfWeek}s. Reservations cannot be scheduled outside operating hours.`,
-      'INVALID_BOOKING_INTERVAL',
+      'OUTSIDE_OPERATING_HOURS',
     );
   }
 
@@ -99,14 +99,14 @@ export function calculateRequiredSlots(resource, startAt, endAt) {
   if (startMs < openInstant.getTime()) {
     throw ApiError.badRequest(
       `Requested start time (${startAt.toISOString()}) is before resource opening time (${openInstant.toISOString()}).`,
-      'INVALID_BOOKING_INTERVAL',
+      'OUTSIDE_OPERATING_HOURS',
     );
   }
 
   if (endMs > closeInstant.getTime()) {
     throw ApiError.badRequest(
       `Requested end time (${endAt.toISOString()}) extends beyond resource closing time (${closeInstant.toISOString()}).`,
-      'INVALID_BOOKING_INTERVAL',
+      'OUTSIDE_OPERATING_HOURS',
     );
   }
 
@@ -196,6 +196,15 @@ export async function allocateBookingWithSlots({
     );
   }
 
+  // 2b. Advance booking window restriction (max 90 days ahead)
+  const MAX_ADVANCE_MS = 90 * 24 * 60 * 60 * 1000;
+  if (startDate.getTime() > Date.now() + MAX_ADVANCE_MS) {
+    throw ApiError.badRequest(
+      'Reservations cannot be scheduled more than 90 days in advance.',
+      'INVALID_BOOKING_INTERVAL',
+    );
+  }
+
   // 3. Validate alignment and calculate required slots
   const requiredSlots = calculateRequiredSlots(resource, startDate, endDate);
 
@@ -217,7 +226,7 @@ export async function allocateBookingWithSlots({
       if (maintenanceConflict) {
         throw ApiError.conflict(
           'The requested time slot overlaps with a scheduled maintenance blackout period.',
-          'BOOKING_CONFLICT',
+          'MAINTENANCE_CONFLICT',
         );
       }
 
@@ -260,7 +269,26 @@ export async function allocateBookingWithSlots({
       const createdSlots = await ResourceSlot.insertMany(slotDocuments, { session });
 
       return {
-        booking: booking.toSafeObject(),
+        booking: {
+          id: booking._id.toString(),
+          userId: booking.userId.toString(),
+          resourceId: booking.resourceId.toString(),
+          resource: {
+            id: resource._id.toString(),
+            name: resource.name,
+            category: resource.category,
+            location: resource.location,
+            capacity: resource.capacity,
+            slotDurationMinutes: resource.slotDurationMinutes,
+          },
+          startAt: booking.startAt,
+          endAt: booking.endAt,
+          status: booking.status,
+          notes: booking.notes,
+          slotCount: createdSlots.length,
+          createdAt: booking.createdAt,
+          updatedAt: booking.updatedAt,
+        },
         slots: createdSlots.map((s) => s.toSafeObject()),
       };
     };

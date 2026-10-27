@@ -691,6 +691,140 @@ Prompt 8 implements the database schemas and internal service primitives (`serve
 
 ---
 
+## Booking Creation & Reservation Workflow (Prompt 9)
+
+### Create Reservation
+
+`POST /api/v1/bookings`
+
+Creates a new reservation for an active resource with transaction-safe, atomic fixed-duration slot allocation.
+
+- **Access:** Authenticated (`authenticate` middleware required).
+- **Ownership Enforcement:** The authenticated user's ID (`req.userId`) is derived exclusively from the verified JWT cookie or Bearer token. Client-provided `userId` values in the request body are rejected with `400 Bad Request`.
+- **Initial Status:** Server-managed; strictly assigned as `confirmed`. Clients cannot supply arbitrary statuses (`cancelled`, `completed`, etc.).
+- **Slot Alignment:** The requested interval must be an exact integer multiple of the resource's `slotDurationMinutes` and aligned to the slot grid anchored at resource opening time.
+- **Operating Hours:** The reservation must fall completely within the resource's operating hours for the given day of the week.
+- **Half-Open Intervals:** Evaluates intervals on `[startAt, endAt)` boundaries.
+- **Concurrency Protection:** Allocation executes within a MongoDB transaction. Concurrently competing requests colliding on the same slot are rejected at the database level by the unique compound index on `ResourceSlot (resourceId, slotStartAt)`, raising `409 Conflict` (`BOOKING_CONFLICT`).
+- **Advisory Availability:** The `GET /resources/:id/availability` endpoint is advisory. A slot displayed as available may be reserved by another client before allocation commits. The booking endpoint performs authoritative transactional validation and slot reservation.
+- **Success Status:** `201 Created`
+
+#### Request Body
+```json
+{
+  "resourceId": "671e482bf66895768659d9f1",
+  "startAt": "2026-10-28T10:00:00Z",
+  "endAt": "2026-10-28T11:00:00Z",
+  "notes": "Collaborative machine learning project review"
+}
+```
+
+#### Validation Invariants
+- `resourceId`: Required string matching a 24-character hexadecimal MongoDB ObjectId.
+- `startAt`: Required ISO 8601 timestamp with explicit time zone context (`Z` or `+/-HH:mm`). Must be in the future and within the 90-day advance booking window.
+- `endAt`: Required ISO 8601 timestamp with explicit time zone context. Must be strictly later than `startAt` (`[startAt, endAt)`).
+- `notes`: Optional string, maximum 1000 characters.
+- **Mass-Assignment Defense:** Strictly rejects unexpected fields (e.g. `userId`, `status`, `cancellationReason`, `createdAt`, `updatedAt`, `slots`).
+
+#### Example 201 Created Response
+```json
+{
+  "success": true,
+  "message": "Booking created successfully.",
+  "data": {
+    "booking": {
+      "id": "671e621bf66895768659da05",
+      "userId": "671e3b62f66895768659d9a0",
+      "resourceId": "671e482bf66895768659d9f1",
+      "resource": {
+        "id": "671e482bf66895768659d9f1",
+        "name": "Collaborative Study Suite A",
+        "category": "study-room",
+        "location": "Library Building 2, Room 204",
+        "capacity": 6,
+        "slotDurationMinutes": 30
+      },
+      "startAt": "2026-10-28T10:00:00.000Z",
+      "endAt": "2026-10-28T11:00:00.000Z",
+      "status": "confirmed",
+      "notes": "Collaborative machine learning project review",
+      "slotCount": 2,
+      "createdAt": "2026-10-27T12:00:00.000Z",
+      "updatedAt": "2026-10-27T12:00:00.000Z"
+    },
+    "slots": [
+      {
+        "id": "671e621bf66895768659da06",
+        "resourceId": "671e482bf66895768659d9f1",
+        "slotStartAt": "2026-10-28T10:00:00.000Z",
+        "slotEndAt": "2026-10-28T10:30:00.000Z",
+        "bookingId": "671e621bf66895768659da05",
+        "createdAt": "2026-10-27T12:00:00.000Z",
+        "updatedAt": "2026-10-27T12:00:00.000Z"
+      },
+      {
+        "id": "671e621bf66895768659da07",
+        "resourceId": "671e482bf66895768659d9f1",
+        "slotStartAt": "2026-10-28T10:30:00.000Z",
+        "slotEndAt": "2026-10-28T11:00:00.000Z",
+        "bookingId": "671e621bf66895768659da05",
+        "createdAt": "2026-10-27T12:00:00.000Z",
+        "updatedAt": "2026-10-27T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+#### Example Error Responses
+
+- **Concurrent Slot Double-Booking Attempt (`409 Conflict`):**
+```json
+{
+  "success": false,
+  "message": "One or more requested time slots have already been reserved by a concurrent booking.",
+  "code": "BOOKING_CONFLICT"
+}
+```
+
+- **Maintenance Overlap (`409 Conflict`):**
+```json
+{
+  "success": false,
+  "message": "The requested time slot overlaps with a scheduled maintenance blackout period.",
+  "code": "MAINTENANCE_CONFLICT"
+}
+```
+
+- **Unaligned Slot Duration (`400 Bad Request`):**
+```json
+{
+  "success": false,
+  "message": "Reservation duration must be an integer multiple of the resource slot duration (30 minutes).",
+  "code": "INVALID_BOOKING_INTERVAL"
+}
+```
+
+- **Outside Operating Hours (`400 Bad Request`):**
+```json
+{
+  "success": false,
+  "message": "Requested start time (2026-10-28T07:30:00.000Z) is before resource opening time (2026-10-28T08:00:00.000Z).",
+  "code": "OUTSIDE_OPERATING_HOURS"
+}
+```
+
+- **Standalone MongoDB Without Transaction Support (`503 Service Unavailable`):**
+```json
+{
+  "success": false,
+  "message": "Database transactions are unavailable. Multi-document booking allocation requires a MongoDB replica set deployment.",
+  "code": "TRANSACTIONS_UNAVAILABLE"
+}
+```
+
+---
+
 ## Planned API Groups (Upcoming Prompts)
 
 | Group | Namespace | Responsibilities | Target Prompt | Access |
@@ -700,8 +834,9 @@ Prompt 8 implements the database schemas and internal service primitives (`serve
 | Resources | `/api/v1/resources` & `/api/v1/admin/resources` | Resource discovery, catalog search, admin management | **Implemented (Prompt 6)** | Public reads / Admin writes & management |
 | Availability | `/api/v1/resources/:resourceId/availability` | Query bookable slots on `[start, end)` intervals | **Implemented (Prompt 7)** | Public reads |
 | Allocation Primitives | *Internal Service* | Atomic slot allocation, unique index concurrency, transaction safety | **Implemented (Prompt 8)** | Server-side internal primitives |
-| Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 9 | Authenticated (ownership enforced) |
-| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 10 | Administrator |
+| Booking Creation | `/api/v1/bookings` | Authenticated reservation creation with atomic slot allocation | **Implemented (Prompt 9)** | Authenticated (ownership enforced) |
+| Booking Lifecycle | `/api/v1/bookings` | User booking history, detail inspection, cancellation, reschedule | Prompt 10 | Authenticated (ownership enforced) |
+| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 11 | Administrator |
 
 ---
 
@@ -710,6 +845,7 @@ Prompt 8 implements the database schemas and internal service primitives (`serve
 Reservation creation and rescheduling require multi-document consistency across `Bookings` and `ResourceSlots`. The application uses MongoDB transactions with Mongoose sessions.
 
 Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions and will return `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`).
+
 
 
 

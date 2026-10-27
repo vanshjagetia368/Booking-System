@@ -51,10 +51,15 @@ export function errorHandler(err, req, res, next) {
   // 5. MongoDB Duplicate Key Conflict (Code 11000)
   if (err.code === 11000) {
     statusCode = 409;
-    const duplicatedFields = Object.keys(err.keyPattern || err.keyValue || {});
-    const fieldList = duplicatedFields.length > 0 ? duplicatedFields.join(', ') : 'field';
-    message = `A record with this ${fieldList} already exists.`;
-    code = 'DUPLICATE_KEY_CONFLICT';
+    if (err.keyPattern && (err.keyPattern.slotStartAt || err.keyValue?.slotStartAt)) {
+      message = 'One or more requested time slots have already been reserved by a concurrent booking.';
+      code = 'BOOKING_CONFLICT';
+    } else {
+      const duplicatedFields = Object.keys(err.keyPattern || err.keyValue || {});
+      const fieldList = duplicatedFields.length > 0 ? duplicatedFields.join(', ') : 'field';
+      message = `A record with this ${fieldList} already exists.`;
+      code = 'DUPLICATE_KEY_CONFLICT';
+    }
     details = err.keyValue || null;
   }
 
