@@ -65,24 +65,31 @@ server/                     Express backend workspace
       database.js           Mongoose connection pooling, lifecycle logging, state diagnostics, and memoization
       env.js                Centralized environment loader with schema validation
     controllers/            HTTP request/response controllers
+      auth.controller.js    User registration, login, logout, and profile handlers
       health.controller.js  Service liveness and database readiness diagnostic handler
     middleware/             Cross-cutting HTTP middleware
+      authenticate.js       JWT verification from HTTP-only cookie or Bearer header
       errorHandler.js       Centralized error handler (sanitizes Mongoose/Mongo errors, excludes production stacks)
       logger.js             Lightweight HTTP logger (redacts headers, tokens, and payloads)
       notFound.js           404 route not found handler
+      requireRole.js        Role-based route authorization middleware (e.g. requireRole('admin'))
       validate.js           Request schema validation middleware generator
-    models/                 Mongoose schemas and indexes (reserved for Prompts 5-8)
+    models/                 Mongoose schemas and indexes
+      User.js               User identity model with bcrypt hashing and safe serialization
     routes/                 Express route handlers
+      auth.routes.js        Authentication routes (/register, /login, /logout, /me)
       health.routes.js      Health check route handler
-      index.js              Master API v1 router mounting /health and reserving future namespaces
-    services/               Business and domain services (reserved for Prompts 5-8)
+      index.js              Master API v1 router mounting /health and /auth
+    services/               Business and domain services
+      auth.service.js       Token issuance/verification, cookie management, credentials verification
     utils/                  Shared backend utilities
       ApiError.js           Structured operational HTTP error class with status and error codes
       apiResponse.js        Standardized JSON response envelope helpers (sendSuccess, sendError)
       asyncHandler.js       Async controller error forwarder for Express
     validators/             Input validation primitives and schema helpers
+      auth.validator.js     Registration and login validation with mass-assignment defense
       common.js             Reusable validation primitives (ObjectIds, emails, ISO dates, intervals, pagination)
-    app.js                  Express application setup (CORS, security headers, middleware, routes)
+    app.js                  Express application setup (CORS, security headers, cookie parsing, middleware, routes)
     server.js               Process entry point (database connection, HTTP listening, graceful shutdown)
   .env.example              Template for backend environment variables
   package.json              Server workspace manifest and scripts
@@ -91,7 +98,7 @@ docs/
   requirements/             Product scope, user roles, and invariants
   architecture/             Decoupled architecture and transaction-safe slot allocation design
   database-design/          Planned MongoDB collections and relationships
-  api-specification/        API v1 specification, response convention, and health endpoint
+  api-specification/        API v1 specification, response convention, auth, and health endpoints
 ```
 
 ---
@@ -137,11 +144,12 @@ Key environment variables:
 | `NODE_ENV` | Environment mode (`development`, `production`, `test`) | `development` |
 | `MONGODB_URI` | MongoDB connection URI (replica set required for transactions) | `mongodb://127.0.0.1:27017/smart_resource_booking` |
 | `CLIENT_URL` | Allowed CORS origin for client requests | `http://localhost:5173` |
-| `JWT_SECRET` | Reserved for future authentication modules (Prompt 5) | `dev_jwt_secret_placeholder` |
-| `JWT_EXPIRES_IN` | Reserved token expiration window | `7d` |
+| `JWT_SECRET` | Secret key used to sign and verify JSON Web Tokens | `dev_jwt_secret_change_in_production` (Required strong secret in production) |
+| `JWT_EXPIRES_IN` | JWT expiration duration string | `7d` |
+| `COOKIE_NAME` | Name of the authentication HTTP-only cookie | `auth_token` |
 
 > **Security Note:**
-> Never commit `.env` to Git or expose database connection strings, database credentials, or JWT secrets to the client frontend.
+> Never commit `.env` to Git or expose database connection strings, database credentials, or JWT secrets to the client frontend. In production, `NODE_ENV=production` strictly enforces that `JWT_SECRET` is defined and cannot use placeholder secrets.
 
 ### 3. Start the Backend Server
 
@@ -187,6 +195,20 @@ Expected output when running with database:
 
 If the database is offline or connecting, the endpoint cleanly reports status `503 Service Unavailable` with `status: "degraded"` and `database.ready: false`, without crashing or throwing unhandled exceptions.
 
+### 5. Authentication & Authorization (Prompt 5)
+
+Authentication is implemented with bcrypt password hashing (12 rounds) and signed JWT tokens stored in `httpOnly` cookies with `sameSite: "lax"`.
+
+Endpoints:
+- `POST /api/v1/auth/register` — Registers a new user with role `user`. Mass assignment of privileged roles is strictly rejected.
+- `POST /api/v1/auth/login` — Authenticates user, verifies password, and sets `auth_token` HTTP-only cookie.
+- `POST /api/v1/auth/logout` — Clears the `auth_token` cookie from the client.
+- `GET /api/v1/auth/me` — Retrieves current authenticated user's sanitized profile (requires authentication).
+
+Middleware:
+- `authenticate`: Extracts and validates JWT from HTTP-only cookie or `Authorization: Bearer <token>` header, verifies user active status in MongoDB, and attaches sanitized `req.user` (`id`, `name`, `email`, `role`, `status`) and `req.userId`.
+- `requireRole(...roles)`: Enforces role permissions (e.g. `requireRole('admin')`), returning `403 Forbidden` (`INSUFFICIENT_PERMISSIONS`) if the user lacks the role.
+
 ---
 
 ## Client Setup and Development
@@ -211,19 +233,19 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–4 (Full-Stack Foundation Complete)
-- **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client.
-- **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, body parsing, request logging, and configurable CORS origin policy.
+### Implemented in Prompts 1–5 (Full-Stack Foundation & Auth Complete)
+- **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client configured with `credentials: 'include'`.
+- **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, cookie parsing (`cookie-parser`), body parsing, request logging, and configurable CORS origin policy.
 - **Database Management:** Robust MongoDB connection management (`connectDatabase`, `disconnectDatabase`, `getDatabaseState`) with URI credential masking, connection lifecycle event logging, and concurrent connection memoization.
 - **Process Lifecycle:** Process entry point (`src/server.js`) with startup verification and graceful shutdown handlers for `SIGINT` and `SIGTERM`.
 - **Standardized API Conventions:** Master router mounting `/api/v1`, standardized JSON envelopes (`{ success, message, data, code }`), and structured operational errors via `ApiError`.
-- **Error Handling & Sanitization:** Centralized error handler (`errorHandler.js`) with Mongoose validation, CastError, duplicate key, and CORS error normalization.
-- **Validation Infrastructure:** Extensible request validation middleware (`validate.js`) with reusable validation helpers (`validators/common.js`) for ObjectIds, emails, ISO dates, half-open intervals, pagination, and enums.
+- **Error Handling & Sanitization:** Centralized error handler (`errorHandler.js`) with Mongoose validation, CastError, duplicate key (email conflict), and CORS error normalization.
+- **Validation Infrastructure:** Extensible request validation middleware (`validate.js`) with reusable validation helpers (`validators/common.js` and `validators/auth.validator.js`) protecting against mass assignment.
+- **Authentication & Security:** User model (`models/User.js`) with normalized lowercase email, bcrypt hashing, `comparePassword`, and `toSafeObject` sanitization. Public registration with automatic session creation, login with user-enumeration defense, logout with cookie expiration, and `GET /api/v1/auth/me`.
+- **Authorization Infrastructure:** `authenticate` and `requireRole` middleware ensuring that client-provided roles are never trusted and server-side roles dictate access to privileged routes.
 - **Diagnostic Health Endpoint:** Live `GET /api/v1/health` distinguishing process liveness from database readiness.
-- **Frontend/Backend Integration:** Seamless alignment between frontend `apiClient.js` and backend `/api/v1` namespace, verified via end-to-end connectivity test.
 
 ### Planned for Future Prompts
-- **Prompt 5:** User authentication, password hashing (bcrypt), JWT sessions, and role permissions.
 - **Prompt 6:** Resource catalog, category filtering, operating hours, and availability calendars.
 - **Prompt 7:** Concurrency-safe booking creation, fixed-duration slot allocations, rescheduling, and cancellations.
 - **Prompt 8:** Administrator inventory oversight, maintenance blackouts, and audit logs.
