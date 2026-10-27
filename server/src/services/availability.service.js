@@ -145,7 +145,6 @@ export async function calculateResourceAvailability(resourceId, dateString, curr
 
     ResourceSlot.find({
       resourceId: resource._id,
-      status: 'allocated',
       slotStartAt: { $gte: dayStartInstant, $lt: dayEndInstant },
     }).lean(),
   ]);

@@ -100,6 +100,16 @@ bookingSchema.pre('validate', function () {
 bookingSchema.index({ resourceId: 1, status: 1, startAt: 1, endAt: 1 });
 
 /**
+ * Compound index for retrieving a user's booking history sorted by start time:
+ */
+bookingSchema.index({ userId: 1, startAt: -1 });
+
+/**
+ * Compound index for status-based lifecycle queries and completion jobs:
+ */
+bookingSchema.index({ status: 1, startAt: 1 });
+
+/**
  * Safe plain-object serialization.
  */
 bookingSchema.methods.toSafeObject = function () {

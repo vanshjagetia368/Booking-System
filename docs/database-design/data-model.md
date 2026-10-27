@@ -1,66 +1,119 @@
-# Planned MongoDB data model
+# MongoDB Data Model and Concurrency Architecture
 
-The collections below are architectural design, not implemented Mongoose schemas. The `createdAt` and `updatedAt` concepts apply to records that need timestamps.
+This document specifies the MongoDB collections, Mongoose schemas, indexing strategies, and transactional allocation invariants for the Smart Resource Booking System.
 
-## Collections
+---
 
-### Users
+## Collections and Schemas
 
+### 1. Users (`server/src/models/User.js`)
 Stores account identity and authorization data:
+- `name`: String, 2–50 characters, trimmed.
+- `email`: Normalized, trimmed, lowercase string with a unique index.
+- `password`: Salted bcrypt hash (12 rounds); never stored or returned in plaintext.
+- `role`: Enum `['user', 'admin']`, defaulting to `user`. Public registration cannot assign administrative roles.
+- `status`: Enum `['active', 'disabled']`, defaulting to `active`.
+- `createdAt` and `updatedAt`: Auto-managed timestamps.
 
-- Name and normalized email (unique).
-- Password hash; never the plaintext password.
-- Role, including ordinary user and administrator.
-- Account status.
-- Creation and update timestamps.
+### 2. Resources (`server/src/models/Resource.js`)
+Stores bookable physical facilities and campus equipment:
+- `name`: String, 2–100 characters, trimmed.
+- `description`: String, max 1000 characters, trimmed.
+- `category`: Enum `['study-room', 'meeting-room', 'lab-equipment', 'other']`.
+- `location`: String, 2–100 characters, trimmed.
+- `capacity`: Integer, 1–1000.
+- `slotDurationMinutes`: Integer, 15–480, multiple of 15 (default `30`).
+- `operatingHours`: Weekly schedule object (`monday` to `sunday`), each day specifying `isOpen` (boolean), `openTime` (HH:mm), and `closeTime` (HH:mm). Invariant: `openTime < closeTime` when open.
+- `timeZone`: Facility time zone (default `'UTC'`).
+- `status`: Enum `['active', 'inactive']`, defaulting to `active`.
+- **Indexes:**
+  - `{ status: 1, category: 1 }` (compound discovery index)
+  - `{ name: 'text', description: 'text', location: 'text' }` (text search index)
 
-### Resources
+### 3. Bookings (`server/src/models/Booking.js`)
+Stores reservation lifecycles and permanent audit history:
+- `userId`: ObjectId reference to `Users`, required.
+- `resourceId`: ObjectId reference to `Resources`, required.
+- `startAt`: Date (instant), required.
+- `endAt`: Date (instant), required. Invariant: `startAt < endAt`.
+- `status`: Enum `['confirmed', 'cancelled', 'completed']`, defaulting to `confirmed`.
+- `notes`: Optional string, max 1000 characters.
+- `cancellationReason`: Optional string, max 500 characters.
+- `cancelledAt`: Optional timestamp.
+- **Indexes:**
+  - `{ resourceId: 1, status: 1, startAt: 1, endAt: 1 }` (interval overlap and active reservation checks)
+  - `{ userId: 1, startAt: -1 }` (user reservation history queries)
+  - `{ status: 1, startAt: 1 }` (lifecycle management queries)
 
-Stores bookable facility or equipment information:
+*Audit Invariant:* Cancellation updates `status: 'cancelled'`, records `cancelledAt` and `cancellationReason`, and releases active slot records. It never deletes the historical `Booking` document.
 
-- Name, description, category, and location.
-- Capacity where applicable.
-- Operating schedule and bookable slot duration.
-- Active/inactive status.
-- Creation and update timestamps.
+### 4. ResourceSlots (`server/src/models/ResourceSlot.js`)
+Stores fixed-duration slot allocations to enforce atomic concurrency safety:
+- `resourceId`: ObjectId reference to `Resources`, required.
+- `slotStartAt`: Date (instant), required.
+- `slotEndAt`: Date (instant), required. Invariant: `slotStartAt < slotEndAt`.
+- `bookingId`: ObjectId reference to `Bookings`, required, indexed.
+- `createdAt` and `updatedAt`: Auto-managed timestamps.
+- **Unique Compound Index:**
+  ```javascript
+  { resourceId: 1, slotStartAt: 1 } // unique: true
+  ```
+  Guarantees that two concurrent operations cannot allocate the same resource slot at the same instant.
 
-### Bookings
+### 5. MaintenanceBlocks (`server/src/models/MaintenanceBlock.js`)
+Stores periods during which a resource is unavailable due to maintenance, repair, or inspection:
+- `resourceId`: ObjectId reference to `Resources`, required.
+- `startAt`: Date (instant), required.
+- `endAt`: Date (instant), required. Invariant: `startAt < endAt`.
+- `reason`: String, max 500 characters, default `'Scheduled maintenance'`.
+- `createdBy`: ObjectId reference to `Users`.
+- **Indexes:**
+  - `{ resourceId: 1, startAt: 1, endAt: 1 }` (interval overlap checks)
 
-Stores reservation history:
+---
 
-- References to the user and resource.
-- Start and end instants.
-- Status: `confirmed`, `cancelled`, or `completed`.
-- Cancellation information where appropriate.
-- Creation and update timestamps.
+## Scheduling and Concurrency Invariants
 
-Cancellation changes a booking's status; it does not erase the historical record.
+### 1. Half-Open Intervals
+All intervals use half-open semantics: `[startAt, endAt)`. Two intervals `A` and `B` overlap if and only if:
+```text
+A.start < B.end && A.end > B.start
+```
+Adjacent intervals (e.g. `A.end === B.start`) are compatible and do not conflict.
 
-### ResourceSlots
+### 2. Slot-Grid Alignment
+A requested reservation `[startAt, endAt)` must align with the resource's `slotDurationMinutes` grid anchored to the day's configured opening time:
+- `(startAt - openInstant) % slotDurationMs === 0`
+- `(endAt - startAt) % slotDurationMs === 0`
+- `startAt >= openInstant` and `endAt <= closeInstant`
+- Single bookings spanning multiple contiguous increments allocate one `ResourceSlot` per fixed duration. Partial or unaligned intervals are rejected.
 
-Stores allocation of fixed-duration resource slots to bookings:
+### 3. Transaction-Safe Allocation Primitives
+Multi-document allocation (`server/src/services/bookingAllocation.service.js`) coordinates `Bookings` and `ResourceSlots` inside a MongoDB transaction session:
+1. Verify operating schedule, interval alignment, and future start time.
+2. Verify that no overlapping `MaintenanceBlock` exists.
+3. Verify that no overlapping active `Booking` exists.
+4. Insert `Booking` document.
+5. Insert required `ResourceSlot` documents with `{ session }`.
+6. Commit transaction.
 
-- Resource reference and `slotStartAt`.
-- Booking reference or equivalent allocation ownership.
-- Slot state if needed by the eventual implementation.
+If a concurrent request attempts to reserve an identical slot, the unique index `{ resourceId: 1, slotStartAt: 1 }` triggers a duplicate key error (`E11000`), the transaction aborts, and the service translates the error to `ApiError.conflict('One or more requested time slots have already been reserved by a concurrent booking.', 'BOOKING_CONFLICT')`.
 
-A unique compound index on `(resourceId, slotStartAt)` is required to prevent two concurrent bookings from claiming the same resource slot.
+### 4. Cancellation and Slot Release
+When a reservation is cancelled:
+1. The `Booking` record status transitions to `'cancelled'`.
+2. Associated `ResourceSlot` records are deleted via `releaseBookingSlots(bookingId)`.
+3. Releasing the slots frees the unique index claim on `(resourceId, slotStartAt)`, making those time blocks available for new reservations while preserving the historical booking audit record.
 
-### MaintenanceBlocks
+### 5. Rescheduling Compatibility
+Rescheduling validates the new interval against schedule and maintenance rules, allocates replacement `ResourceSlots`, and updates the booking's `startAt` and `endAt` inside a single atomic transaction.
 
-Stores periods during which a resource is unavailable:
+---
 
-- Resource reference.
-- Start and end instants.
-- Reason or administrative metadata where appropriate.
-- Creation and update timestamps.
+## MongoDB Deployment Prerequisites for Transactions
 
-## Relationships and consistency
+Multi-document transactions require a MongoDB deployment running as a **replica set** or a **sharded cluster** (`mongos`):
+- **Local Development:** If running a local `mongod`, initialize it as a single-node replica set (`mongod --replSet rs0` and run `rs.initiate()`).
+- **Cloud / Production:** MongoDB Atlas clusters and managed replica sets natively support multi-document transactions.
+- **Standalone Instance Handling:** On standalone MongoDB instances without replica set support, attempting multi-document transactions yields error code `20` (`Transaction numbers are only allowed on a replica set member or mongos`). The service detects this and fails safe with status `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`), preventing partial or uncoordinated writes.
 
-- A user can have many bookings; each booking refers to one user.
-- A resource can have many bookings, allocated slots, and maintenance blocks.
-- A booking can own multiple resource slots, one for each fixed-duration increment in its interval.
-- Maintenance blocks exclude overlapping requested slots for their resource.
-- Slot allocation and booking persistence must be atomic. MongoDB transactions require a replica set or a sharded cluster; standalone MongoDB deployments cannot provide the required multi-document transaction behavior.
-
-Detailed field validation, retention, and schema/index definitions will be finalized alongside implementation. In particular, all stored times should use a consistent instant representation and schedule interpretation.

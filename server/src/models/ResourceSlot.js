@@ -3,9 +3,9 @@ import mongoose from 'mongoose';
 /**
  * ResourceSlot Schema
  *
- * Represents a fixed-duration time slot allocated to a booking for a specific resource.
+ * Represents an active, allocated fixed-duration time slot for a resource.
  * Protected by a compound unique index on (resourceId, slotStartAt) to provide
- * atomic concurrency control against double-booking attempts.
+ * database-level concurrency protection against simultaneous double-booking attempts.
  */
 const resourceSlotSchema = new mongoose.Schema(
   {
@@ -13,12 +13,10 @@ const resourceSlotSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Resource',
       required: [true, 'Resource reference is required.'],
-      index: true,
     },
     slotStartAt: {
       type: Date,
       required: [true, 'Slot start instant is required.'],
-      index: true,
     },
     slotEndAt: {
       type: Date,
@@ -27,13 +25,7 @@ const resourceSlotSchema = new mongoose.Schema(
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Booking',
-      default: null,
-      index: true,
-    },
-    status: {
-      type: String,
-      enum: ['allocated', 'released'],
-      default: 'allocated',
+      required: [true, 'Booking reference is required.'],
       index: true,
     },
   },
@@ -51,10 +43,40 @@ const resourceSlotSchema = new mongoose.Schema(
 );
 
 /**
+ * Validates that slotStartAt precedes slotEndAt
+ */
+resourceSlotSchema.pre('validate', function () {
+  if (this.slotStartAt && this.slotEndAt) {
+    if (this.slotStartAt >= this.slotEndAt) {
+      this.invalidate(
+        'slotEndAt',
+        'Slot end time must be strictly later than slot start time.',
+      );
+    }
+  }
+});
+
+/**
  * Compound unique index preventing concurrent duplicate slot allocations.
- * An active (allocated) slot cannot exist twice for the same resource at the same start time.
+ * Guarantees that two concurrent transactions cannot allocate the same resource
+ * at the same start time.
  */
 resourceSlotSchema.index({ resourceId: 1, slotStartAt: 1 }, { unique: true });
+
+/**
+ * Safe plain-object serialization.
+ */
+resourceSlotSchema.methods.toSafeObject = function () {
+  return {
+    id: this._id.toString(),
+    resourceId: this.resourceId.toString(),
+    slotStartAt: this.slotStartAt,
+    slotEndAt: this.slotEndAt,
+    bookingId: this.bookingId ? this.bookingId.toString() : null,
+    createdAt: this.createdAt,
+    updatedAt: this.updatedAt,
+  };
+};
 
 export const ResourceSlot = mongoose.model('ResourceSlot', resourceSlotSchema);
 

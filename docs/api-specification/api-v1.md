@@ -667,6 +667,30 @@ The availability engine dynamically computes bookable time slots for an active r
 
 ---
 
+---
+
+## Booking Models & Concurrency-Safe Allocation Primitives (Prompt 8)
+
+Prompt 8 implements the database schemas and internal service primitives (`server/src/services/bookingAllocation.service.js`) required for concurrency-safe booking allocation. Public HTTP endpoints for creating and managing bookings will be implemented in Prompt 9.
+
+### 1. Concurrency Safety Model
+- **Fixed-Duration Slot Grid:** All bookings must align with the resource's `slotDurationMinutes`.
+- **Compound Unique Index:** `ResourceSlot` enforces `{ resourceId: 1, slotStartAt: 1 }` with `{ unique: true }`.
+- **Atomic Multi-Document Transactions:** Booking creation and slot insertion run inside a single MongoDB transaction session where supported. If a concurrent request attempts to allocate the same slot, the unique index triggers a duplicate-key error (`E11000`) and the service returns `409 Conflict` (`BOOKING_CONFLICT`).
+
+### 2. Standard Allocation Error Codes
+
+| Error Code | HTTP Status | Description |
+|---|---|---|
+| `BOOKING_CONFLICT` | `409 Conflict` | The requested time slot is already reserved or overlaps with scheduled maintenance. |
+| `INVALID_BOOKING_INTERVAL` | `400 Bad Request` | Unaligned slot duration, start/end times outside operating hours, or past-time attempt. |
+| `RESOURCE_NOT_FOUND` | `404 Not Found` | Target resource does not exist. |
+| `RESOURCE_INACTIVE` | `400 Bad Request` | Target resource is deactivated and cannot accept new reservations. |
+| `TRANSACTIONS_UNAVAILABLE` | `503 Service Unavailable` | The MongoDB deployment does not support transactions (e.g. standalone instance without replica set). |
+| `BOOKING_ALLOCATION_FAILED` | `500 Internal Error` | Unexpected database error during atomic allocation. |
+
+---
+
 ## Planned API Groups (Upcoming Prompts)
 
 | Group | Namespace | Responsibilities | Target Prompt | Access |
@@ -675,16 +699,18 @@ The availability engine dynamically computes bookable time slots for an active r
 | Authentication | `/api/v1/auth` | Registration, sign-in, session profile, sign-out | **Implemented (Prompt 5)** | Public (sign-in/reg) / Authenticated (profile) |
 | Resources | `/api/v1/resources` & `/api/v1/admin/resources` | Resource discovery, catalog search, admin management | **Implemented (Prompt 6)** | Public reads / Admin writes & management |
 | Availability | `/api/v1/resources/:resourceId/availability` | Query bookable slots on `[start, end)` intervals | **Implemented (Prompt 7)** | Public reads |
-| Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 8 | Authenticated (ownership enforced) |
-| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 9 | Administrator |
+| Allocation Primitives | *Internal Service* | Atomic slot allocation, unique index concurrency, transaction safety | **Implemented (Prompt 8)** | Server-side internal primitives |
+| Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 9 | Authenticated (ownership enforced) |
+| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 10 | Administrator |
 
 ---
 
 ## Concurrency and Transaction Requirements
 
-Create and reschedule operations in Prompt 8 must validate the interval, resource status, operating schedule, maintenance blocks, and slot alignment on the server. Conflicts must be rejected atomically even under high concurrent load.
+Reservation creation and rescheduling require multi-document consistency across `Bookings` and `ResourceSlots`. The application uses MongoDB transactions with Mongoose sessions.
 
-The booking implementation is planned around fixed-duration `ResourceSlots` protected by a unique compound index on `(resourceId, slotStartAt)` and MongoDB transactions. Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions.
+Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions and will return `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`).
+
 
 
 
