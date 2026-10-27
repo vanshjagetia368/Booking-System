@@ -35,14 +35,16 @@ The repository is structured as a decoupled full-stack monorepo using **npm work
 client/                     React frontend workspace
   public/                   Static public assets
   src/
-    app/                    Centralized configuration, route paths, router definitions, and 404 page
+    app/                    Centralized configuration, route paths, router definitions, providers, and 404 page
+      providers/            Application provider wrappers (AppProviders.jsx)
     assets/                 Media assets and brand graphics
     components/
-      layout/               Navbar, Footer, AppLayout, FeaturePlaceholder
+      layout/               Navbar, Footer, AppLayout, PageContainer, FeaturePlaceholder
       ui/                   Reusable UI primitives (Button, Alert, Badge, Card, LoadingSpinner, EmptyState, PageHeader)
-      forms/                Form components (reserved for upcoming prompts)
-      calendar/             Calendar and slot schedule components (reserved for Prompt 6)
-      resources/            Resource cards and filter components (reserved for Prompt 6)
+      forms/                Accessible form primitives (FormField, Input, Select, Textarea)
+      feedback/             Global feedback states (LoadingState, ErrorState, ErrorBoundary, Modal)
+      calendar/             Calendar and slot schedule components (reserved for Prompt 16)
+      resources/            Resource cards and filter components (reserved for Prompt 15)
     features/
       admin/                Administrator management views (Prompt 8)
       auth/                 Authentication and session views (Prompt 5)
@@ -368,8 +370,19 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–12 (Complete Backend Integration, Administrative Analytics, API Contract Alignment & Operational Readiness Complete)
-- **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client configured with `credentials: 'include'`.
+### Implemented in Prompts 1–14 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, and Role-Aware Navigation)
+- **Frontend Authentication & Session Management (Prompt 14):**
+  - **Authentication Service (`authService.js`):** Communicates with `/api/v1/auth/register`, `/login`, `/logout`, and `/me` using the centralized API client with `credentials: 'include'` for secure HTTP-only cookie session persistence.
+  - **Authentication Context & Hook (`AuthContext.jsx`, `useAuth.js`):** Manages global session state (`user`, `isAuthenticated`, `isAdmin`, `isLoading`, `isInitialized`), handles initial session resolution on app mount, cleanly distinguishes expected 401 unauthenticated responses from network failures, and provides unified `login`, `register`, `logout`, and `refreshUser` actions.
+  - **Accessible Auth Forms (`LoginForm.jsx`, `RegisterForm.jsx`):** Input validation, password confirmation matching without submitting extraneous fields, mass-assignment defense, clear error banners with field-level error mapping, and keyboard accessibility.
+  - **Authentication Pages (`LoginPage.jsx`, `RegisterPage.jsx`):** Polished user sign-in and account registration pages with automatic redirection of authenticated users and return-path redirection (`location.state.from`) post-login.
+  - **Protected Route Guards (`ProtectedRoute.jsx`, `AdminRoute.jsx`):** Restricts access to user booking routes (`/bookings`, `/bookings/:bookingId`) and administrator routes (`/admin`, `/admin/resources`, `/admin/bookings`, `/admin/maintenance`) during and after startup resolution, displaying a dedicated accessible 403 Forbidden Access Denied screen for non-admin authenticated users.
+  - **Role-Aware Navigation (`Navbar.jsx`):** Dynamically updates desktop header and mobile drawer navigation based on authentication status and user role, showing user display name chip, admin badge, and functional logout action while preventing layout shifts during initial session resolution.
+- **Frontend Architecture & Routing (Prompt 13):** React 19 + Vite 6 client shell, centralized routing hierarchy (`AppRoutes.jsx`, `routes.js`), provider composition (`AppProviders.jsx`), persistent layout shell (`AppLayout`, `Navbar`, `Footer`, `PageContainer`), and custom 404 page (`NotFoundPage`).
+- **Centralized API Client:** Robust HTTP client (`apiClient.js`, `lib/apiClient.js`) with configured `VITE_API_BASE_URL`, automatic JSON body serialization, defensive response parsing (guarding against HTML error pages), query string builder, `credentials: 'include'` for cookie-based authentication, and structured `ApiError` with machine-readable error codes and status getters.
+- **Accessible Form Primitives:** Semantic form controls (`FormField`, `Input`, `Select`, `Textarea`) with linked `<label>`, helper text, error text, and ARIA attributes (`aria-invalid`, `aria-describedby`).
+- **Global Feedback Components:** Reusable states for data loading (`LoadingState`, `LoadingSpinner`), recoverable errors (`ErrorState` with retry callbacks and error code badges), unhandled rendering crashes (`ErrorBoundary`), and accessible confirmation dialogs (`Modal`).
+- **Design System Styling:** Comprehensive CSS custom property tokens and responsive styles in `styles.css` covering typography, layout bounding, navigation, cards, alerts, forms, modal backdrops, and feedback states.
 - **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, cookie parsing (`cookie-parser`), body parsing, request logging, and configurable CORS origin policy.
 - **Database Management:** Robust MongoDB connection management (`connectDatabase`, `disconnectDatabase`, `getDatabaseState`) with URI credential masking, connection lifecycle event logging, and concurrent connection memoization.
 - **Process Lifecycle:** Process entry point (`src/server.js`) with startup verification and graceful shutdown handlers for `SIGINT` and `SIGTERM`.
@@ -389,4 +402,4 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **API Specification & Architecture Documentation:** Comprehensive and synchronized documentation in `docs/` (`api-specification/api-v1.md`, `architecture/overview.md`, `database-design/data-model.md`, `requirements/project-requirements.md`).
 
 ### Planned for Future Prompts
-- **Prompt 13+:** React frontend implementation (Authentication and session management views, Resource catalog and search filters, Schedule availability calendar, Booking reservation workflows, Booking history and cancellation/rescheduling interfaces, and Administrative management dashboards).
+- **Prompt 15+:** React frontend feature implementation (Resource catalog and search filters, Schedule availability calendar, Booking reservation workflows, Booking history and cancellation/rescheduling interfaces, and Administrative management dashboards).

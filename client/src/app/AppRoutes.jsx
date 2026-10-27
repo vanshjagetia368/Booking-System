@@ -1,181 +1,181 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES } from './routes.js';
 import AppLayout from '../components/layout/AppLayout.jsx';
 import FeaturePlaceholder from '../components/layout/FeaturePlaceholder.jsx';
 import HomePage from '../features/resources/pages/HomePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import {
+  LoginPage,
+  RegisterPage,
+  ProtectedRoute,
+  AdminRoute,
+} from '../features/auth/index.js';
 
 /**
  * Centralized Route Hierarchy
  *
  * Defines all route paths, layout wrappers, and view handlers.
- * Unimplemented feature domains display structured, honest FeaturePlaceholder views
- * until their corresponding implementation prompts.
+ * Employs ProtectedRoute for authenticated user domains and AdminRoute for administrative operations.
  */
 export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        {/* Landing Overview */}
+        {/* Public Landing Overview */}
         <Route path={ROUTES.HOME} element={<HomePage />} />
 
-        {/* Resource Discovery & Catalog */}
+        {/* Public Resource Discovery & Catalog (Prompt 15) */}
         <Route
           path={ROUTES.RESOURCES}
           element={
             <FeaturePlaceholder
               title="Resource Discovery & Catalog"
-              promptStage="Prompt 4/22: Resource Discovery & Filtering"
+              promptStage="Prompt 15/22: Resource Discovery, Search & Catalog Filtering"
               description="Browse active study rooms, conference spaces, and laboratory instruments with category and capacity filtering."
               plannedCapabilities={[
-                'Search and filter by category (study rooms, labs, media equipment)',
-                'Filter by capacity, equipment features, and location',
-                'Status indicators for active, inactive, and under-maintenance resources',
-                'Fast client-side query string synchronization',
+                'Search and filter by category (study-room, meeting-room, lab-equipment, other)',
+                'Filter by capacity range (minCapacity, maxCapacity) and location keyword',
+                'Status indicators for active bookable resources',
+                'URL query string synchronization for shareable search states',
               ]}
             />
           }
         />
 
-        {/* Resource Details & Availability */}
+        {/* Public Resource Details & Availability (Prompt 16) */}
         <Route
-          path={ROUTES.RESOURCE_DETAILS()}
+          path={ROUTES.RESOURCE_DETAILS(':resourceId')}
           element={
             <FeaturePlaceholder
               title="Resource Details & Availability Calendar"
-              promptStage="Prompt 5/22: Resource Availability & Details"
+              promptStage="Prompt 16/22: Resource Details, Operating Hours & Availability Calendar"
               description="Inspect specifications, operating hours, and bookable time slots on an interactive calendar."
               plannedCapabilities={[
-                'Detailed specifications, equipment inventory, and rules',
-                'Visual date picker and daily schedule breakdown',
-                'Half-open [start, end) time interval slot selection',
-                'Real-time conflict detection against maintenance blackouts and bookings',
+                'Detailed specifications, equipment inventory, and operating schedules',
+                'Calendar date selection with real-time slot generation',
+                'Half-open [startAt, endAt) time interval slot selection',
+                'Exclusion of past times, maintenance blackouts, and confirmed reservations',
               ]}
             />
           }
         />
 
-        {/* Authentication - Login */}
-        <Route
-          path={ROUTES.LOGIN}
-          element={
-            <FeaturePlaceholder
-              title="User Authentication — Sign In"
-              promptStage="Prompt 3/22: Authentication & Session Management"
-              description="Secure authentication supporting ordinary users and administrators."
-              plannedCapabilities={[
-                'Credential validation with password hashing (bcrypt)',
-                'JWT session management and secure authorization headers',
-                'Role-based permissions (User vs. Administrator)',
-                'Graceful session expiry and renewal handling',
-              ]}
-            />
-          }
-        />
+        {/* Authentication Routes */}
+        <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+        <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
 
-        {/* Authentication - Registration */}
-        <Route
-          path={ROUTES.REGISTER}
-          element={
-            <FeaturePlaceholder
-              title="User Registration — Create Account"
-              promptStage="Prompt 3/22: Authentication & Session Management"
-              description="Register new user accounts with input validation and role assignment."
-              plannedCapabilities={[
-                'Form validation for name, institutional email, and secure password',
-                'Duplicate account prevention',
-                'Automatic session initialization upon successful registration',
-              ]}
-            />
-          }
-        />
+        {/* Authenticated User Protected Routes */}
+        <Route element={<ProtectedRoute />}>
+          {/* Personal Bookings History (Prompt 18) */}
+          <Route
+            path={ROUTES.BOOKINGS}
+            element={
+              <FeaturePlaceholder
+                title="My Reservations & Booking History"
+                promptStage="Prompt 18/22: Personal Booking History, Cancellation & Rescheduling"
+                description="Track current reservations, view booking history, and manage existing allocations."
+                plannedCapabilities={[
+                  'List active upcoming bookings and past historical records',
+                  'Eligible booking cancellation with automatic atomic slot release',
+                  'Reschedule reservation with atomic interval reassignment and validation',
+                  'Filter bookings by status: confirmed, cancelled, completed',
+                ]}
+              />
+            }
+          />
 
-        {/* Personal Bookings */}
-        <Route
-          path={ROUTES.MY_BOOKINGS}
-          element={
-            <FeaturePlaceholder
-              title="My Reservations & Booking History"
-              promptStage="Prompt 6/22: Booking Workflow & History"
-              description="Track current reservations, view booking history, and manage existing allocations."
-              plannedCapabilities={[
-                'List active upcoming bookings and past historical records',
-                'Eligible booking cancellation with automatic slot release',
-                'Reschedule reservation with atomic interval reassignment',
-                'Filter bookings by status: confirmed, cancelled, completed',
-              ]}
-            />
-          }
-        />
+          {/* Backward-compatibility redirect for /my-bookings -> /bookings */}
+          <Route path="/my-bookings" element={<Navigate to={ROUTES.BOOKINGS} replace />} />
 
-        {/* Booking Confirmation / Details */}
-        <Route
-          path={ROUTES.BOOKING_DETAILS()}
-          element={
-            <FeaturePlaceholder
-              title="Booking Confirmation & Receipt"
-              promptStage="Prompt 6/22: Booking Workflow & History"
-              description="Detailed view of a specific reservation with confirmation code and schedule."
-              plannedCapabilities={[
-                'Unique reservation identifier and timestamped receipt',
-                'Resource details and allocated time interval [start, end)',
-                'Cancellation policy verification and action controls',
-              ]}
-            />
-          }
-        />
+          {/* Booking Confirmation / Details (Prompt 18) */}
+          <Route
+            path={ROUTES.BOOKING_DETAILS(':bookingId')}
+            element={
+              <FeaturePlaceholder
+                title="Booking Confirmation & Details"
+                promptStage="Prompt 18/22: Personal Booking History, Cancellation & Rescheduling"
+                description="Detailed view of a specific reservation with confirmation details, schedule, and cancellation actions."
+                plannedCapabilities={[
+                  'Unique reservation identifier and timestamped receipt',
+                  'Resource details and allocated time interval [startAt, endAt)',
+                  'Ownership verification and cancellation/rescheduling action controls',
+                ]}
+              />
+            }
+          />
+        </Route>
 
-        {/* Administrator Portal - Dashboard */}
-        <Route
-          path={ROUTES.ADMIN_DASHBOARD}
-          element={
-            <FeaturePlaceholder
-              title="Administrator Operations Console"
-              promptStage="Prompt 7/22: Administrator Resource & Booking Management"
-              description="Central dashboard for campus facility coordinators and system administrators."
-              plannedCapabilities={[
-                'System metrics: active resources, current reservations, utilization rates',
-                'Quick links to resource inventory and reservation audit logs',
-                'Maintenance schedule overview and alert notices',
-              ]}
-            />
-          }
-        />
+        {/* Administrator-Only Protected Routes */}
+        <Route element={<AdminRoute />}>
+          {/* Administrator Portal - Overview Dashboard (Prompt 20) */}
+          <Route
+            path={ROUTES.ADMIN_DASHBOARD}
+            element={
+              <FeaturePlaceholder
+                title="Administrator Operations Console"
+                promptStage="Prompt 20/22: Administrator Analytics & Operational Overview"
+                description="Central dashboard for campus facility coordinators and system administrators."
+                plannedCapabilities={[
+                  'Real-time metrics: resource counts, upcoming bookings, in-effect maintenance blocks',
+                  'Summary metrics powered by memory-efficient MongoDB aggregation pipelines',
+                  'Quick navigation to resource inventory, booking oversight, and maintenance controls',
+                ]}
+              />
+            }
+          />
 
-        {/* Administrator Portal - Resource Inventory */}
-        <Route
-          path={ROUTES.ADMIN_RESOURCES}
-          element={
-            <FeaturePlaceholder
-              title="Admin: Resource Inventory Management"
-              promptStage="Prompt 7/22: Administrator Resource & Booking Management"
-              description="Create, update, activate, deactivate, and configure operating schedules for campus assets."
-              plannedCapabilities={[
-                'Create new bookable resource with custom slot durations (e.g. 30m, 60m)',
-                'Define operating hours and advance booking limits',
-                'Schedule maintenance blackout intervals',
-                'Toggle active/inactive status to temporarily prevent bookings',
-              ]}
-            />
-          }
-        />
+          {/* Administrator Portal - Resource Inventory (Prompt 19) */}
+          <Route
+            path={ROUTES.ADMIN_RESOURCES}
+            element={
+              <FeaturePlaceholder
+                title="Admin: Resource Inventory Management"
+                promptStage="Prompt 19/22: Administrator Resource & Booking Management"
+                description="Create, update, activate, deactivate, and configure operating schedules for campus assets."
+                plannedCapabilities={[
+                  'Create new bookable resource with custom slot durations (multiples of 15 min)',
+                  'Configure daily operating schedules with openTime and closeTime rules',
+                  'Toggle active/inactive status to manage catalog visibility',
+                  'Partial updates to capacity, location, and description',
+                ]}
+              />
+            }
+          />
 
-        {/* Administrator Portal - Reservation Oversight */}
-        <Route
-          path={ROUTES.ADMIN_BOOKINGS}
-          element={
-            <FeaturePlaceholder
-              title="Admin: Reservation Oversight & Audit"
-              promptStage="Prompt 7/22: Administrator Resource & Booking Management"
-              description="Comprehensive reservation oversight across all resources and users."
-              plannedCapabilities={[
-                'Search and filter reservations across all facilities and users',
-                'Administrative cancellation with reason logging',
-                'Conflict resolution and override controls',
-              ]}
-            />
-          }
-        />
+          {/* Administrator Portal - Reservation Oversight (Prompt 19) */}
+          <Route
+            path={ROUTES.ADMIN_BOOKINGS}
+            element={
+              <FeaturePlaceholder
+                title="Admin: Reservation Oversight & Audit"
+                promptStage="Prompt 19/22: Administrator Resource & Booking Management"
+                description="Comprehensive reservation oversight across all facilities, users, and statuses."
+                plannedCapabilities={[
+                  'Search and filter reservations across all facilities, users, and statuses',
+                  'Controlled administrative cancellation with mandatory audit reason logging',
+                  'Deterministic chronological sorting and pagination',
+                ]}
+              />
+            }
+          />
+
+          {/* Administrator Portal - Maintenance Blackout Management (Prompt 19) */}
+          <Route
+            path={ROUTES.ADMIN_MAINTENANCE}
+            element={
+              <FeaturePlaceholder
+                title="Admin: Resource Maintenance Blackout Management"
+                promptStage="Prompt 19/22: Administrator Resource & Booking Management"
+                description="Schedule and manage maintenance blackout periods to take resources temporarily offline."
+                plannedCapabilities={[
+                  'Schedule maintenance on half-open interval [startAt, endAt)',
+                  'Conflict protection preventing overlap with existing confirmed user bookings',
+                  'Automatic slot availability restoration upon maintenance block deletion',
+                ]}
+              />
+            }
+          />
+        </Route>
 
         {/* 404 Catch-All */}
         <Route path="*" element={<NotFoundPage />} />

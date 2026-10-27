@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../app/routes.js';
+import { useAuth } from '../../features/auth/index.js';
 import Badge from '../ui/Badge.jsx';
+import Button from '../ui/Button.jsx';
 
 /**
- * Main application navigation header.
+ * Role-Aware Application Navigation Header
  *
  * Implements accessible navigation, keyboard-visible focus states,
- * and responsive mobile drawer navigation.
+ * dynamic role-based navigation links, user identity chip, and functional logout.
  */
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const { user, isAuthenticated, isAdmin, isLoading, logout } = useAuth();
 
   // Close mobile navigation drawer whenever route changes
   useEffect(() => {
@@ -29,11 +35,29 @@ export default function Navbar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileMenuOpen]);
 
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      setIsMobileMenuOpen(false);
+      navigate(ROUTES.HOME);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  // Compose navigation links dynamically based on resolved authentication & role
   const navLinks = [
     { label: 'Explore Resources', path: ROUTES.RESOURCES },
-    { label: 'My Bookings', path: ROUTES.MY_BOOKINGS },
-    { label: 'Admin Portal', path: ROUTES.ADMIN_DASHBOARD },
   ];
+
+  if (isAuthenticated) {
+    navLinks.push({ label: 'My Bookings', path: ROUTES.BOOKINGS });
+
+    if (isAdmin) {
+      navLinks.push({ label: 'Admin Portal', path: ROUTES.ADMIN_DASHBOARD });
+    }
+  }
 
   return (
     <header className="navbar-container">
@@ -77,11 +101,46 @@ export default function Navbar() {
           </ul>
         </nav>
 
-        {/* Header Actions */}
+        {/* Header Actions - Desktop */}
         <div className="navbar__actions navbar__actions--desktop">
-          <Link to={ROUTES.LOGIN} className="btn btn--outline btn--sm">
-            Sign In
-          </Link>
+          {isLoading ? (
+            <div className="navbar__loading-state" aria-hidden="true">
+              <span className="navbar__loading-skeleton" />
+            </div>
+          ) : isAuthenticated ? (
+            <div className="navbar__user-area">
+              <div className="navbar__user-identity" title={user?.email}>
+                <span className="navbar__user-name">{user?.name || user?.email}</span>
+                {isAdmin ? (
+                  <Badge variant="warning" size="sm" className="navbar__role-badge">
+                    Admin
+                  </Badge>
+                ) : (
+                  <Badge variant="neutral" size="sm" className="navbar__role-badge">
+                    User
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                isLoading={isLoggingOut}
+                aria-label="Sign out of your account"
+              >
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <div className="navbar__auth-actions">
+              <Link to={ROUTES.LOGIN} className="btn btn--outline btn--sm">
+                Sign In
+              </Link>
+              <Link to={ROUTES.REGISTER} className="btn btn--primary btn--sm">
+                Register
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Mobile Navigation Toggle Button */}
@@ -129,6 +188,7 @@ export default function Navbar() {
                   Home
                 </NavLink>
               </li>
+
               {navLinks.map((link) => (
                 <li key={link.path}>
                   <NavLink
@@ -141,27 +201,60 @@ export default function Navbar() {
                   </NavLink>
                 </li>
               ))}
+
               <li className="navbar__drawer-divider" aria-hidden="true" />
-              <li>
-                <NavLink
-                  to={ROUTES.LOGIN}
-                  className={({ isActive }) =>
-                    `navbar__drawer-link ${isActive ? 'navbar__drawer-link--active' : ''}`.trim()
-                  }
-                >
-                  Sign In
-                </NavLink>
-              </li>
-              <li>
-                <NavLink
-                  to={ROUTES.REGISTER}
-                  className={({ isActive }) =>
-                    `navbar__drawer-link ${isActive ? 'navbar__drawer-link--active' : ''}`.trim()
-                  }
-                >
-                  Register Account
-                </NavLink>
-              </li>
+
+              {isLoading ? (
+                <li className="navbar__drawer-item navbar__drawer-item--loading">
+                  <span>Checking session...</span>
+                </li>
+              ) : isAuthenticated ? (
+                <>
+                  <li className="navbar__drawer-user-info">
+                    <span className="navbar__drawer-user-label">Signed in as:</span>
+                    <strong className="navbar__drawer-user-name">{user?.name}</strong>
+                    <span className="navbar__drawer-user-email">{user?.email}</span>
+                    <div className="navbar__drawer-user-role">
+                      <Badge variant={isAdmin ? 'warning' : 'neutral'} size="sm">
+                        {user?.role || 'user'}
+                      </Badge>
+                    </div>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="navbar__drawer-link navbar__drawer-link--logout"
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                    >
+                      {isLoggingOut ? 'Signing out...' : 'Sign Out'}
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <NavLink
+                      to={ROUTES.LOGIN}
+                      className={({ isActive }) =>
+                        `navbar__drawer-link ${isActive ? 'navbar__drawer-link--active' : ''}`.trim()
+                      }
+                    >
+                      Sign In
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to={ROUTES.REGISTER}
+                      className={({ isActive }) =>
+                        `navbar__drawer-link ${isActive ? 'navbar__drawer-link--active' : ''}`.trim()
+                      }
+                    >
+                      Register Account
+                    </NavLink>
+                  </li>
+                </>
+              )}
             </ul>
           </nav>
         </div>
