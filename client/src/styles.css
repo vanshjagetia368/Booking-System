@@ -2654,3 +2654,328 @@ ul, ol {
   color: var(--color-text-muted);
   text-align: center;
 }
+
+/* ==========================================================================
+   Booking Creation & Confirmation Workflow
+   ========================================================================== */
+
+.booking-create-page,
+.booking-confirmation-page {
+  padding-block: var(--space-8) var(--space-12);
+}
+
+.booking-create-page__header {
+  margin-bottom: var(--space-6);
+  text-align: center;
+}
+
+.booking-create-page__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-text-main);
+  letter-spacing: -0.025em;
+  margin-bottom: var(--space-2);
+}
+
+.booking-create-page__subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+}
+
+.booking-create-page__alert {
+  margin-bottom: var(--space-6);
+}
+
+/* User Identity Banner */
+.booking-identity-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface-hover);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-6);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-main);
+}
+
+.booking-identity-banner__icon {
+  font-size: 1.1rem;
+}
+
+/* Missing Selection View */
+.booking-missing-selection {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-10);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.booking-missing-selection__icon {
+  font-size: 3rem;
+}
+
+.booking-missing-selection__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-main);
+}
+
+.booking-missing-selection__message {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  max-width: 28rem;
+  line-height: var(--line-height-relaxed);
+}
+
+/* Booking Summary Card */
+.booking-summary-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-6);
+}
+
+.booking-summary-card__header {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.booking-summary-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.booking-summary-card__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-main);
+  margin-bottom: 2px;
+}
+
+.booking-summary-card__location {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.booking-summary-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.booking-summary-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.booking-summary-card__label {
+  color: var(--color-text-muted);
+}
+
+.booking-summary-card__value {
+  color: var(--color-text-main);
+  text-align: right;
+}
+
+.booking-summary-card__footer {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  text-align: right;
+}
+
+.booking-summary-card__change-link {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--transition-fast);
+}
+
+.booking-summary-card__change-link:hover {
+  color: var(--color-primary-dark);
+}
+
+/* Booking Form Section */
+.booking-form-section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-6);
+}
+
+.booking-form__char-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: right;
+  margin-top: var(--space-1);
+}
+
+/* Booking Actions */
+.booking-create-page__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.booking-submit-button {
+  width: 100%;
+}
+
+.booking-create-page__legal-notice {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: var(--line-height-relaxed);
+}
+
+/* Conflict Message */
+.booking-conflict-message {
+  margin-bottom: var(--space-6);
+}
+
+.booking-conflict-message__text {
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-3);
+  line-height: var(--line-height-relaxed);
+}
+
+.booking-conflict-message__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Booking Confirmation Receipt */
+.booking-confirmation-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-md);
+  max-width: 38rem;
+  margin-inline: auto;
+}
+
+.booking-confirmation-card__hero {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.booking-confirmation-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--radius-full);
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+  margin-bottom: var(--space-4);
+}
+
+.booking-confirmation-card__title {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-text-main);
+  letter-spacing: -0.025em;
+  margin-bottom: var(--space-2);
+}
+
+.booking-confirmation-card__subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+}
+
+.booking-confirmation-receipt {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-hover);
+  padding: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.booking-confirmation-receipt__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px dashed var(--color-border);
+  margin-bottom: var(--space-4);
+}
+
+.booking-confirmation-receipt__label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.booking-confirmation-receipt__code {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  font-family: monospace;
+}
+
+.booking-confirmation-receipt__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.booking-confirmation-receipt__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.booking-confirmation-receipt__item-label {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.booking-confirmation-receipt__item-value {
+  color: var(--color-text-main);
+  text-align: right;
+  margin: 0;
+  word-break: break-word;
+}
+
+.booking-confirmation-receipt__row--timestamp {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.booking-confirmation-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}

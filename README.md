@@ -49,7 +49,7 @@ client/                     React frontend workspace
       admin/                Administrator management views (Prompt 8)
       auth/                 Authentication and session views (Prompt 5)
       availability/         Schedule and availability views (Prompt 6)
-      bookings/             Reservation workflows and history (Prompt 7)
+      bookings/             Reservation workflows, submission, conflict handling, and confirmation (Prompt 16)
       resources/            Home overview and resource catalog views (Prompts 2 & 6)
     hooks/                  Custom React hooks
     lib/                    Shared library wrappers and re-exports
@@ -370,7 +370,15 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–15 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, Role-Aware Navigation, Resource Discovery, Resource Details, Availability Calendar, and Slot Selection)
+### Implemented in Prompts 1–16 (Complete Backend Integration, React Frontend Foundation, Application Routing, Shared Layout, API Client, Global UI States, Frontend Authentication, Session Management, Protected Routes, Role-Aware Navigation, Resource Discovery, Resource Details, Availability Calendar, Slot Selection, and Booking Creation Workflow)
+- **Booking Creation Workflow, Submission, Conflict Handling, and Confirmation (Prompt 16):**
+  - **Booking API Service (`bookingService.js`):** Centralized communication with Express backend booking endpoints (`POST /api/v1/bookings`, `GET /api/v1/bookings/:bookingId`, `GET /api/v1/bookings/my`). Submits exact payload `{ resourceId, startAt, endAt, notes }` with ISO 8601 timestamps and rejects client-side mass assignment.
+  - **Booking Creation Workflow & Pre-validation (`BookingCreatePage.jsx`):** Coordinates selection state passed via router navigation or URL query parameters (`resourceId`, `startAt`, `endAt`). Performs client pre-validation (valid timestamps, positive duration, future start, notes length <= 1000). Includes missing selection empty state with navigation back to discovery.
+  - **Booking Summary & Form Presentation (`BookingSummary.jsx`, `BookingForm.jsx`, `BookingSubmitButton.jsx`):** Displays facility specifications (name, category, location, capacity, time zone, formatted calendar date and interval) and optional reservation notes field with character counter.
+  - **Duplicate Submission Defense & Concurrency Guard:** Employs synchronous `useRef` submission lock combined with React disabled button state, preventing double-clicks or rapid keyboard submission from dispatching duplicate server requests before state re-renders.
+  - **Robust Error & Conflict Handling (`BookingConflictMessage.jsx`):** Parses backend operational error codes (`BOOKING_CONFLICT`, `MAINTENANCE_CONFLICT`, `OUTSIDE_OPERATING_HOURS`, `RESOURCE_INACTIVE`, `UNAUTHENTICATED`). Explains slot contention clearly without automatic blind retries, providing a single-click action to refresh calendar availability and re-select an interval.
+  - **Authoritative Booking Confirmation (`BookingConfirmationPage.jsx`, `BookingConfirmation.jsx`):** Displays server-confirmed reservation receipt (unique reference ID, resource details, confirmed time interval, status badge, timestamp, reservation notes). Supports direct navigation and browser refreshes by fetching verified booking data from `GET /api/v1/bookings/:bookingId`.
+  - **Availability Cache Invalidation & Workflow Transitions:** Invalidates stale browser availability state upon successful reservation creation, guiding users seamlessly from slot selection to booking creation and authoritative confirmation.
 - **Resource Discovery, Details, Availability Calendar, and Slot Selection (Prompt 15):**
   - **Resource Discovery & Catalog (`ResourceDiscoveryPage.jsx`, `ResourceCard.jsx`, `ResourceFilters.jsx`, `ResourceSearch.jsx`, `ResourceGrid.jsx`, `ResourceSummary.jsx`, `resourceService.js`):** Full-featured public resource search with debounced text matching, category filtering (`study-room`, `meeting-room`, `lab-equipment`, `other`), location filtering, min/max capacity boundaries, multi-field sorting, and pagination controls. Includes URL query string synchronization, active filter chips with one-click removal, loading skeletons, and empty state handling.
   - **Resource Specifications & Operating Hours (`ResourceDetailPage.jsx`):** Detailed facility overview displaying capacity, slot duration, time zone, and weekly operating hours schedule table (Monday–Sunday) with open/closed indicators. Communicates inactive resource states clearly to prevent invalid reservation attempts.
@@ -408,4 +416,4 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **API Specification & Architecture Documentation:** Comprehensive and synchronized documentation in `docs/` (`api-specification/api-v1.md`, `architecture/overview.md`, `database-design/data-model.md`, `requirements/project-requirements.md`).
 
 ### Planned for Future Prompts
-- **Prompt 16+:** React frontend feature implementation (Booking reservation creation workflows, Personal booking history and cancellation/rescheduling interfaces, and Administrative management dashboards).
+- **Prompt 17+:** React frontend feature implementation (Personal user booking history, booking detail view, self-service cancellation and rescheduling workflows, and Administrative operational dashboards).

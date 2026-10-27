@@ -21,12 +21,18 @@ export default function LoginPage() {
   useEffect(() => {
     // Redirect if already authenticated
     if (!isLoading && isAuthenticated) {
-      navigate(from, { replace: true });
+      navigate(from, {
+        replace: true,
+        state: { bookingIntent: location.state?.bookingIntent },
+      });
     }
-  }, [isAuthenticated, isLoading, navigate, from]);
+  }, [isAuthenticated, isLoading, navigate, from, location.state]);
 
   const handleSuccess = () => {
-    navigate(from, { replace: true });
+    navigate(from, {
+      replace: true,
+      state: { bookingIntent: location.state?.bookingIntent },
+    });
   };
 
   return (

@@ -62,13 +62,13 @@ export default function SlotSelectionSummary({
       // Transition to login preserving both intended return path and booking intent
       navigate(ROUTES.LOGIN, {
         state: {
-          from: location,
+          from: { pathname: ROUTES.BOOKING_CREATE },
           bookingIntent,
         },
       });
     } else {
       // Transition to user booking workflow preserving selection in router state
-      navigate(ROUTES.BOOKINGS, {
+      navigate(ROUTES.BOOKING_CREATE, {
         state: {
           bookingIntent,
         },

@@ -13,6 +13,10 @@ import {
   ProtectedRoute,
   AdminRoute,
 } from '../features/auth/index.js';
+import {
+  BookingCreatePage,
+  BookingConfirmationPage,
+} from '../features/bookings/index.js';
 
 /**
  * Centralized Route Hierarchy
@@ -38,6 +42,12 @@ export default function AppRoutes() {
 
         {/* Authenticated User Protected Routes */}
         <Route element={<ProtectedRoute />}>
+          {/* Booking Creation Workflow (Prompt 16) */}
+          <Route path={ROUTES.BOOKING_CREATE} element={<BookingCreatePage />} />
+
+          {/* Booking Confirmation Receipt (Prompt 16) */}
+          <Route path={ROUTES.BOOKING_CONFIRMATION(':bookingId')} element={<BookingConfirmationPage />} />
+
           {/* Personal Bookings History (Prompt 18) */}
           <Route
             path={ROUTES.BOOKINGS}
