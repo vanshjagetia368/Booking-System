@@ -1,26 +1,118 @@
-# Planned API specification
+# API Specification (v1)
 
-## Namespace and status
+## Base Namespace & Convention
 
-The planned JSON API namespace is `/api/v1`. The groups below describe intended routes and responsibilities; they are design specifications, not a claim that those endpoints are implemented. The current server scaffold does not yet expose these feature routes.
+All backend API routes are versioned and mounted under the namespace:
 
-All booking, availability, ownership, and permission checks must be enforced by the server. API errors should communicate validation failures and booking conflicts clearly without exposing sensitive implementation details.
+```text
+/api/v1
+```
 
-## Planned groups
+The frontend client communicates with this backend using the base URL configured in `client/.env` (e.g., `VITE_API_BASE_URL=http://localhost:5000/api/v1`).
 
-| Group | Planned responsibilities | Access |
-|---|---|---|
-| Authentication | Registration, sign-in, sign-out, and current-account details | Public for registration/sign-in; authenticated for account details and sign-out |
-| Resources | Browse/search active resources and inspect details; administrator create/update/activate/deactivate | Public or authenticated reads according to final policy; administrator writes |
-| Availability | Query bookable dates and time slots for a resource | Public or authenticated reads according to final policy |
-| Bookings | Create reservations, list the current user's bookings, cancel or reschedule eligible bookings | Authenticated; ownership enforced, with authorized administrator actions |
-| Maintenance | Define, inspect, update, and remove unavailable periods | Administrator |
-| Administration | View/manage reservations and basic usage statistics | Administrator |
+---
 
-## Booking request behavior
+## Standard Response Convention
 
-Create and reschedule operations must validate the interval, resource status and schedule, maintenance blocks, slot alignment, and authorization on the server. Conflicts must be rejected even when simultaneous requests race. The implementation is planned around fixed-duration `ResourceSlots` protected by a unique `(resourceId, slotStartAt)` index and MongoDB transactions where supported.
+All endpoints follow a consistent JSON response structure:
 
-Cancellation preserves booking history and releases allocated slots consistently. Rescheduling must atomically validate and allocate its replacement time without leaving partial state. Transaction support requires a replica set or sharded MongoDB deployment; a standalone deployment is insufficient.
+### Successful Responses
+```json
+{
+  "success": true,
+  "message": "Human-readable status summary",
+  "data": {
+    "key": "value"
+  },
+  "meta": {
+    "optional": "metadata such as pagination"
+  }
+}
+```
 
-Exact endpoint paths, request/response schemas, pagination, and authentication transport will be specified as the corresponding features are implemented.
+### Error Responses
+```json
+{
+  "success": false,
+  "message": "Sanitized error description for user display",
+  "code": "MACHINE_READABLE_ERROR_CODE",
+  "details": {
+    "field": "Specific field validation message"
+  }
+}
+```
+
+*Note: Stack traces are strictly excluded in production environments to avoid leaking internal implementation details.*
+
+---
+
+## Implemented Endpoints (Prompt 3)
+
+### System Health & Diagnostics
+
+`GET /api/v1/health`
+
+Verifies backend process liveness and MongoDB readiness without leaking credentials or environment secrets.
+
+- **Access:** Public
+- **Success Status:** `200 OK` (when both process and database are healthy)
+- **Degraded Status:** `503 Service Unavailable` (when process is running but database is not ready)
+
+#### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Smart Resource Booking API is operating normally.",
+  "data": {
+    "status": "healthy",
+    "service": "smart-resource-booking-api",
+    "environment": "development",
+    "uptimeSeconds": 142,
+    "timestamp": "2026-10-27T10:30:00.000Z",
+    "database": {
+      "ready": true,
+      "state": "connected"
+    }
+  }
+}
+```
+
+#### Example 503 Degraded Response
+```json
+{
+  "success": false,
+  "message": "Smart Resource Booking API is operational, but the database connection is not ready.",
+  "data": {
+    "status": "degraded",
+    "service": "smart-resource-booking-api",
+    "environment": "development",
+    "uptimeSeconds": 12,
+    "timestamp": "2026-10-27T10:30:00.000Z",
+    "database": {
+      "ready": false,
+      "state": "disconnected"
+    }
+  }
+}
+```
+
+---
+
+## Planned API Groups (Upcoming Prompts)
+
+| Group | Namespace | Responsibilities | Target Prompt | Access |
+|---|---|---|---|---|
+| Health | `/api/v1/health` | Service liveness & database readiness | **Implemented (Prompt 3)** | Public |
+| Authentication | `/api/v1/auth` | Registration, sign-in, session profile, sign-out | Prompt 4 | Public (sign-in/reg) / Authenticated (profile) |
+| Resources | `/api/v1/resources` | Resource discovery, catalog search, details | Prompt 5 | Public reads / Admin writes |
+| Availability | `/api/v1/resources/:id/availability` | Query bookable slots on `[start, end)` intervals | Prompt 5 | Public / Authenticated reads |
+| Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 6 | Authenticated (ownership enforced) |
+| Administration | `/api/v1/admin` | Resource inventory, maintenance blackouts, audit | Prompt 7 | Administrator |
+
+---
+
+## Concurrency and Transaction Requirements
+
+Create and reschedule operations in Prompt 6 must validate the interval, resource status, operating schedule, maintenance blocks, and slot alignment on the server. Conflicts must be rejected atomically even under high concurrent load.
+
+The booking implementation is planned around fixed-duration `ResourceSlots` protected by a unique compound index on `(resourceId, slotStartAt)` and MongoDB transactions. Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions.
