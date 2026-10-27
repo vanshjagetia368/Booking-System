@@ -21,6 +21,7 @@ const ALLOWED_CREATE_FIELDS = [
   'capacity',
   'slotDurationMinutes',
   'operatingHours',
+  'timeZone',
   'status',
 ];
 
@@ -32,6 +33,7 @@ const ALLOWED_UPDATE_FIELDS = [
   'capacity',
   'slotDurationMinutes',
   'operatingHours',
+  'timeZone',
   'status',
 ];
 
@@ -469,6 +471,78 @@ export function validateAdminQuery(req, res, next) {
   });
 }
 
+/**
+ * Validates that a string is a strictly valid calendar date formatted as YYYY-MM-DD.
+ * Rejects non-existent dates such as 2026-02-30 or 2026-04-31.
+ *
+ * @param {string} dateString
+ * @returns {boolean}
+ */
+export function isValidCalendarDate(dateString) {
+  if (typeof dateString !== 'string') return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
+
+  const [yearStr, monthStr, dayStr] = dateString.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  if (year < 2000 || year > 2100) return false;
+  if (month < 1 || month > 12) return false;
+
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    testDate.getUTCFullYear() === year &&
+    testDate.getUTCMonth() === month - 1 &&
+    testDate.getUTCDate() === day
+  );
+}
+
+/**
+ * Validates parameters for resource availability discovery:
+ * GET /api/v1/resources/:resourceId/availability?date=YYYY-MM-DD
+ */
+export function validateAvailabilityQuery(req, res, next) {
+  const { resourceId } = req.params;
+  const { date } = req.query;
+
+  // 1. Validate resource ID
+  if (!resourceId || !isValidObjectId(resourceId)) {
+    return next(
+      ApiError.badRequest(
+        'Invalid resource identifier format.',
+        'INVALID_RESOURCE_ID',
+        { resourceId: 'Must be a valid 24-character hexadecimal ObjectId.' },
+      ),
+    );
+  }
+
+  // 2. Validate date query parameter
+  if (!date || typeof date !== 'string') {
+    return next(
+      ApiError.badRequest(
+        'The "date" query parameter is required (format: YYYY-MM-DD).',
+        'VALIDATION_ERROR',
+        { date: 'Missing required date parameter.' },
+      ),
+    );
+  }
+
+  const trimmedDate = date.trim();
+  if (!isValidCalendarDate(trimmedDate)) {
+    return next(
+      ApiError.badRequest(
+        'Invalid date format or impossible calendar date. Expected format: YYYY-MM-DD.',
+        'INVALID_DATE',
+        { date: 'Must be a valid calendar date formatted as YYYY-MM-DD (e.g. 2026-10-28).' },
+      ),
+    );
+  }
+
+  req.validatedAvailabilityDate = trimmedDate;
+  next();
+}
+
 export default {
   validateCreateResource,
   validateUpdateResource,
@@ -476,4 +550,7 @@ export default {
   validateResourceIdParam,
   validatePublicQuery,
   validateAdminQuery,
+  validateAvailabilityQuery,
+  isValidCalendarDate,
 };
+

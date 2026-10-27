@@ -178,6 +178,11 @@ const resourceSchema = new mongoose.Schema(
       type: weeklyScheduleSchema,
       default: () => ({ ...DEFAULT_OPERATING_HOURS }),
     },
+    timeZone: {
+      type: String,
+      default: 'UTC',
+      trim: true,
+    },
     status: {
       type: String,
       required: true,
@@ -239,6 +244,7 @@ resourceSchema.methods.toSafeObject = function () {
     capacity: this.capacity,
     slotDurationMinutes: this.slotDurationMinutes,
     operatingHours: this.operatingHours,
+    timeZone: this.timeZone || 'UTC',
     status: this.status,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,

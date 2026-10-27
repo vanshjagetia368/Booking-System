@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import {
   listPublicResources,
   getPublicResourceById,
+  getResourceAvailability,
   createResource,
   updateResource,
   updateResourceStatus,
@@ -14,6 +15,7 @@ import {
   validateUpdateStatus,
   validateResourceIdParam,
   validatePublicQuery,
+  validateAvailabilityQuery,
 } from '../validators/resource.validator.js';
 
 const resourceRouter = Router();
@@ -24,6 +26,13 @@ const resourceRouter = Router();
 
 // List active resources with query filters & pagination
 resourceRouter.get('/', validatePublicQuery, listPublicResources);
+
+// Get bookable slot availability for an active resource on a given date
+resourceRouter.get(
+  '/:resourceId/availability',
+  validateAvailabilityQuery,
+  getResourceAvailability,
+);
 
 // Get details of an active resource by ID
 resourceRouter.get('/:resourceId', validateResourceIdParam, getPublicResourceById);

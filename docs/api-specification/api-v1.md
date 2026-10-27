@@ -527,6 +527,146 @@ Retrieves full resource details for administration regardless of whether the res
 
 ---
 
+## Resource Availability Engine (Prompt 7)
+
+The availability engine dynamically computes bookable time slots for an active resource on a requested calendar date. It models operating schedules, fixed slot durations, past-time cutoffs, maintenance blackouts, and existing reservation records.
+
+### Scheduling Invariants & Time Model
+
+1. **Half-Open Intervals:** All candidate slots, maintenance periods, and reservations use half-open intervals `[startAt, endAt)`.
+2. **Interval Overlap Condition:** An interval `[startA, endA)` overlaps `[startB, endB)` if and only if:
+   ```text
+   startA < endB && endA > startB
+   ```
+   Adjacent intervals (e.g. `endA === startB`) do not overlap.
+3. **Slot Alignment:** Candidate slots are anchored to the configured opening time of the day's operating hours and incremented by `resource.slotDurationMinutes`. All candidate slots must fit entirely within `[openTime, closeTime)`. No slot starts before opening or extends beyond closing.
+4. **Time Zone Policy:** The facility's local operating hours (e.g. `08:00` to `20:00`) on a calendar date `YYYY-MM-DD` are evaluated in standard UTC instants (`2026-10-28T08:00:00.000Z` to `2026-10-28T20:00:00.000Z`).
+5. **Past-Time Cutoff:** The server evaluates the current instant (`new Date()`). Any slot whose `startAt` is less than or equal to the current instant is marked `available: false` with `reason: "PAST_TIME"`.
+6. **Maintenance Exclusions:** Any slot overlapping an active `MaintenanceBlock` record for the resource is marked `available: false` with `reason: "MAINTENANCE"`.
+7. **Reservation Exclusions:** Any slot overlapping a `confirmed` or `completed` booking, or matching an `allocated` `ResourceSlot` is marked `available: false` with `reason: "RESERVED"`. Cancelled bookings are ignored and release their time.
+8. **Privacy Guarantee:** Availability responses expose only start/end timestamps and availability status. Private user identities, emails, booking notes, and maintenance descriptions are strictly excluded.
+
+---
+
+### Retrieve Resource Availability
+
+`GET /api/v1/resources/:resourceId/availability?date=YYYY-MM-DD`
+
+- **Access:** Public (for active resources)
+- **Path Parameter:** `resourceId` (valid 24-character hexadecimal MongoDB ObjectId).
+- **Query Parameter:** `date` (Required string formatted as `YYYY-MM-DD`; strictly validates calendar rules, rejecting impossible dates such as `2026-02-30`).
+- **Success Status:** `200 OK`
+- **Error Statuses:**
+  - `400 Bad Request` (`INVALID_RESOURCE_ID` or `INVALID_DATE` or `VALIDATION_ERROR`)
+  - `404 Not Found` (`RESOURCE_NOT_FOUND` if resource does not exist or is inactive)
+
+#### Example 200 OK Response (Open Day with Exclusions)
+```json
+{
+  "success": true,
+  "message": "Resource availability retrieved successfully.",
+  "data": {
+    "resourceId": "671e482bf66895768659d9f1",
+    "resourceName": "Collaborative Study Suite A",
+    "date": "2026-10-28",
+    "timeZone": "UTC",
+    "operatingHours": {
+      "isOpen": true,
+      "openTime": "08:00",
+      "closeTime": "12:00"
+    },
+    "slotDurationMinutes": 30,
+    "slots": [
+      {
+        "startAt": "2026-10-28T08:00:00.000Z",
+        "endAt": "2026-10-28T08:30:00.000Z",
+        "available": true,
+        "reason": null
+      },
+      {
+        "startAt": "2026-10-28T08:30:00.000Z",
+        "endAt": "2026-10-28T09:00:00.000Z",
+        "available": true,
+        "reason": null
+      },
+      {
+        "startAt": "2026-10-28T09:00:00.000Z",
+        "endAt": "2026-10-28T09:30:00.000Z",
+        "available": false,
+        "reason": "MAINTENANCE"
+      },
+      {
+        "startAt": "2026-10-28T09:30:00.000Z",
+        "endAt": "2026-10-28T10:00:00.000Z",
+        "available": false,
+        "reason": "MAINTENANCE"
+      },
+      {
+        "startAt": "2026-10-28T10:00:00.000Z",
+        "endAt": "2026-10-28T10:30:00.000Z",
+        "available": false,
+        "reason": "RESERVED"
+      },
+      {
+        "startAt": "2026-10-28T10:30:00.000Z",
+        "endAt": "2026-10-28T11:00:00.000Z",
+        "available": false,
+        "reason": "RESERVED"
+      },
+      {
+        "startAt": "2026-10-28T11:00:00.000Z",
+        "endAt": "2026-10-28T11:30:00.000Z",
+        "available": true,
+        "reason": null
+      },
+      {
+        "startAt": "2026-10-28T11:30:00.000Z",
+        "endAt": "2026-10-28T12:00:00.000Z",
+        "available": false,
+        "reason": "RESERVED"
+      }
+    ],
+    "summary": {
+      "totalSlots": 8,
+      "availableSlots": 3,
+      "reservedSlots": 3,
+      "maintenanceSlots": 2,
+      "pastSlots": 0
+    }
+  }
+}
+```
+
+#### Example 200 OK Response (Closed Day)
+```json
+{
+  "success": true,
+  "message": "Resource availability retrieved successfully.",
+  "data": {
+    "resourceId": "671e482bf66895768659d9f1",
+    "resourceName": "Collaborative Study Suite A",
+    "date": "2026-11-01",
+    "timeZone": "UTC",
+    "operatingHours": {
+      "isOpen": false,
+      "openTime": null,
+      "closeTime": null
+    },
+    "slotDurationMinutes": 30,
+    "slots": [],
+    "summary": {
+      "totalSlots": 0,
+      "availableSlots": 0,
+      "reservedSlots": 0,
+      "maintenanceSlots": 0,
+      "pastSlots": 0
+    }
+  }
+}
+```
+
+---
+
 ## Planned API Groups (Upcoming Prompts)
 
 | Group | Namespace | Responsibilities | Target Prompt | Access |
@@ -534,16 +674,17 @@ Retrieves full resource details for administration regardless of whether the res
 | Health | `/api/v1/health` | Service liveness & database readiness | **Implemented (Prompt 3)** | Public |
 | Authentication | `/api/v1/auth` | Registration, sign-in, session profile, sign-out | **Implemented (Prompt 5)** | Public (sign-in/reg) / Authenticated (profile) |
 | Resources | `/api/v1/resources` & `/api/v1/admin/resources` | Resource discovery, catalog search, admin management | **Implemented (Prompt 6)** | Public reads / Admin writes & management |
-| Availability | `/api/v1/resources/:id/availability` | Query bookable slots on `[start, end)` intervals | Prompt 7 | Public / Authenticated reads |
-| Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 7 | Authenticated (ownership enforced) |
-| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 8 | Administrator |
+| Availability | `/api/v1/resources/:resourceId/availability` | Query bookable slots on `[start, end)` intervals | **Implemented (Prompt 7)** | Public reads |
+| Bookings | `/api/v1/bookings` | Create reservations, user booking history, cancel, reschedule | Prompt 8 | Authenticated (ownership enforced) |
+| Administration | `/api/v1/admin/maintenance` | Maintenance blackouts, inventory analytics, and audit | Prompt 9 | Administrator |
 
 ---
 
 ## Concurrency and Transaction Requirements
 
-Create and reschedule operations in Prompt 7 must validate the interval, resource status, operating schedule, maintenance blocks, and slot alignment on the server. Conflicts must be rejected atomically even under high concurrent load.
+Create and reschedule operations in Prompt 8 must validate the interval, resource status, operating schedule, maintenance blocks, and slot alignment on the server. Conflicts must be rejected atomically even under high concurrent load.
 
 The booking implementation is planned around fixed-duration `ResourceSlots` protected by a unique compound index on `(resourceId, slotStartAt)` and MongoDB transactions. Multi-document transactions require a MongoDB deployment with replica set support (such as a local replica set or MongoDB Atlas); standalone MongoDB instances do not support multi-document transactions.
+
 
 

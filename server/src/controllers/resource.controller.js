@@ -1,6 +1,7 @@
 import asyncHandler from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import * as resourceService from '../services/resource.service.js';
+import { calculateResourceAvailability } from '../services/availability.service.js';
 
 /**
  * Public: List active resources with optional filters and pagination.
@@ -32,6 +33,23 @@ export const getPublicResourceById = asyncHandler(async (req, res) => {
     data: {
       resource,
     },
+  });
+});
+
+/**
+ * Public: Retrieve bookable slot availability for an active resource on a given date.
+ * GET /api/v1/resources/:resourceId/availability?date=YYYY-MM-DD
+ */
+export const getResourceAvailability = asyncHandler(async (req, res) => {
+  const result = await calculateResourceAvailability(
+    req.params.resourceId,
+    req.validatedAvailabilityDate,
+  );
+
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: 'Resource availability retrieved successfully.',
+    data: result,
   });
 });
 
@@ -122,9 +140,11 @@ export const getAdminResourceById = asyncHandler(async (req, res) => {
 export default {
   listPublicResources,
   getPublicResourceById,
+  getResourceAvailability,
   createResource,
   updateResource,
   updateResourceStatus,
   listAdminResources,
   getAdminResourceById,
 };
+

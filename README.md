@@ -76,7 +76,10 @@ server/                     Express backend workspace
       requireRole.js        Role-based route authorization middleware (e.g. requireRole('admin'))
       validate.js           Request schema validation middleware generator
     models/                 Mongoose schemas and indexes
+      Booking.js            Reservation model with half-open interval validation and status indexing
+      MaintenanceBlock.js   Maintenance blackout model with range overlap indexing
       Resource.js           Physical resource model (categories, capacity, slot duration, operating hours)
+      ResourceSlot.js       Atomic slot allocation model with compound unique index (resourceId, slotStartAt)
       User.js               User identity model with bcrypt hashing and safe serialization
     routes/                 Express route handlers
       adminResource.routes.js Administrative resource management routes (/admin/resources)
@@ -86,6 +89,7 @@ server/                     Express backend workspace
       resource.routes.js    Public and admin resource routes (/resources)
     services/               Business and domain services
       auth.service.js       Token issuance/verification, cookie management, credentials verification
+      availability.service.js Availability engine (candidate slot generation, past time, maintenance & booking exclusions)
       resource.service.js   Resource CRUD, regex-safe search, category/capacity filters, pagination
     utils/                  Shared backend utilities
       ApiError.js           Structured operational HTTP error class with status and error codes
@@ -230,6 +234,22 @@ Administrative Endpoints (require `authenticate` + `requireRole('admin')`):
 - `GET /api/v1/admin/resources` — Administrative resource inventory listing both active and inactive resources with status filtering.
 - `GET /api/v1/admin/resources/:resourceId` — Administrative resource inspection by ID regardless of status.
 
+### 7. Resource Availability Engine (Prompt 7)
+
+Computes bookable time slots for an active facility or equipment resource on a requested calendar date:
+
+Endpoint:
+- `GET /api/v1/resources/:resourceId/availability?date=YYYY-MM-DD` — Public availability discovery.
+
+Key Engine Rules & Exclusions:
+- **Half-Open Intervals:** All candidate slots, maintenance periods, and bookings use `[startAt, endAt)` with the overlap rule `existing.start < slot.end && existing.end > slot.start`.
+- **Slot Alignment:** Candidate slots are anchored to the configured opening time, incremented by `resource.slotDurationMinutes`, and fit completely within `[openTime, closeTime)`.
+- **Operating Hours:** Resolves daily schedule for the requested date. Closed days return `slots: []` with `isOpen: false`.
+- **Past-Time Cutoff:** Slots with `startAt <= currentTime` are marked `available: false` with `reason: "PAST_TIME"`.
+- **Maintenance Exclusions:** Overlapping `MaintenanceBlock` periods mark slots `available: false` with `reason: "MAINTENANCE"`.
+- **Reservation Exclusions:** Confirmed/completed bookings and allocated `ResourceSlot` records mark slots `available: false` with `reason: "RESERVED"`. Cancelled bookings are ignored.
+- **Privacy:** Public responses expose only timestamps, availability status, and non-sensitive reason codes without leaking user details or internal notes.
+
 ---
 
 ## Client Setup and Development
@@ -254,7 +274,7 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 
 ## Implementation Status
 
-### Implemented in Prompts 1–6 (Full-Stack Foundation, Auth & Resources Complete)
+### Implemented in Prompts 1–7 (Full-Stack Foundation, Auth, Resources & Availability Complete)
 - **Frontend Foundation:** React 19 + Vite 6 client shell, centralized routing, semantic responsive layouts, UI primitives (`Button`, `Alert`, `Badge`, `Card`, `LoadingSpinner`, `EmptyState`, `PageHeader`), interval-compatible date formatters, and centralized API client configured with `credentials: 'include'`.
 - **Backend Architecture:** Express 5 application setup (`createApp`) with security headers, cookie parsing (`cookie-parser`), body parsing, request logging, and configurable CORS origin policy.
 - **Database Management:** Robust MongoDB connection management (`connectDatabase`, `disconnectDatabase`, `getDatabaseState`) with URI credential masking, connection lifecycle event logging, and concurrent connection memoization.
@@ -265,8 +285,9 @@ Open `http://localhost:5173/` in your browser. The Home page includes an interac
 - **Authentication & Security:** User model (`models/User.js`) with normalized lowercase email, bcrypt hashing, `comparePassword`, and `toSafeObject` sanitization. Public registration with automatic session creation, login with user-enumeration defense, logout with cookie expiration, and `GET /api/v1/auth/me`.
 - **Authorization Infrastructure:** `authenticate` and `requireRole` middleware ensuring that client-provided roles are never trusted and server-side roles dictate access to privileged routes.
 - **Resource Management & Discovery:** Resource model (`models/Resource.js`) supporting room and equipment categories, capacity constraints, validated slot durations, and weekly operating hours with closing-time validation. Public search/discovery with regex escaping and pagination metadata. Complete administrator inventory, creation, partial updates, and status activation/deactivation.
+- **Availability Engine:** `GET /api/v1/resources/:resourceId/availability` computing aligned candidate slots from operating hours, applying half-open interval overlap rules, excluding past slots, maintenance blackouts (`MaintenanceBlock.js`), and existing reservations (`Booking.js`, `ResourceSlot.js`).
 - **Diagnostic Health Endpoint:** Live `GET /api/v1/health` distinguishing process liveness from database readiness.
 
 ### Planned for Future Prompts
-- **Prompt 7:** Concurrency-safe booking creation, fixed-duration slot allocations, availability schedule querying, rescheduling, and cancellations.
-- **Prompt 8:** Administrator maintenance blackout periods, inventory analytics, and audit logs.
+- **Prompt 8:** Concurrency-safe booking creation, fixed-duration slot allocations, rescheduling, and cancellations.
+- **Prompt 9:** Administrator maintenance blackout periods, inventory analytics, and audit logs.
