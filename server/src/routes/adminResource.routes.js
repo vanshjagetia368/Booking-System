@@ -4,6 +4,9 @@ import { requireRole } from '../middleware/requireRole.js';
 import {
   listAdminResources,
   getAdminResourceById,
+  createResource,
+  updateResource,
+  updateResourceStatus,
 } from '../controllers/resource.controller.js';
 import {
   createMaintenanceBlock,
@@ -13,6 +16,9 @@ import {
 import {
   validateAdminQuery,
   validateResourceIdParam,
+  validateCreateResource,
+  validateUpdateResource,
+  validateUpdateStatus,
 } from '../validators/resource.validator.js';
 import {
   validateCreateMaintenanceBlock,
@@ -32,10 +38,38 @@ adminResourceRouter.use(authenticate, requireRole('admin'));
 adminResourceRouter.get('/', validateAdminQuery, listAdminResources);
 
 /**
+ * POST /api/v1/admin/resources
+ * Administrative resource creation.
+ */
+adminResourceRouter.post('/', validateCreateResource, createResource);
+
+/**
  * GET /api/v1/admin/resources/:resourceId
  * Retrieve administrative resource details (including inactive).
  */
 adminResourceRouter.get('/:resourceId', validateResourceIdParam, getAdminResourceById);
+
+/**
+ * PATCH /api/v1/admin/resources/:resourceId
+ * Update resource details.
+ */
+adminResourceRouter.patch(
+  '/:resourceId',
+  validateResourceIdParam,
+  validateUpdateResource,
+  updateResource,
+);
+
+/**
+ * PATCH /api/v1/admin/resources/:resourceId/status
+ * Activate or deactivate a resource.
+ */
+adminResourceRouter.patch(
+  '/:resourceId/status',
+  validateResourceIdParam,
+  validateUpdateStatus,
+  updateResourceStatus,
+);
 
 /**
  * POST /api/v1/admin/resources/:resourceId/maintenance

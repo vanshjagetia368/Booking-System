@@ -40,12 +40,13 @@ Stores reservation lifecycles and permanent audit history:
 - `notes`: Optional string, max 1000 characters.
 - `cancellationReason`: Optional string, max 500 characters.
 - `cancelledAt`: Optional timestamp.
+- `cancelledBy`: ObjectId reference to `Users`, optional. Tracks administrative or user identity performing the cancellation.
 - **Indexes:**
   - `{ resourceId: 1, status: 1, startAt: 1, endAt: 1 }` (interval overlap and active reservation checks)
   - `{ userId: 1, startAt: -1 }` (user reservation history queries)
   - `{ status: 1, startAt: 1 }` (lifecycle management queries)
 
-*Audit Invariant:* Cancellation updates `status: 'cancelled'`, records `cancelledAt` and `cancellationReason`, and releases active slot records. It never deletes the historical `Booking` document.
+*Audit Invariant:* Cancellation updates `status: 'cancelled'`, records `cancelledAt`, `cancellationReason`, and `cancelledBy`, and releases active slot records. It never deletes the historical `Booking` document.
 
 ### 4. ResourceSlots (`server/src/models/ResourceSlot.js`)
 Stores fixed-duration slot allocations to enforce atomic concurrency safety:
@@ -116,4 +117,25 @@ Multi-document transactions require a MongoDB deployment running as a **replica 
 - **Local Development:** If running a local `mongod`, initialize it as a single-node replica set (`mongod --replSet rs0` and run `rs.initiate()`).
 - **Cloud / Production:** MongoDB Atlas clusters and managed replica sets natively support multi-document transactions.
 - **Standalone Instance Handling:** On standalone MongoDB instances without replica set support, attempting multi-document transactions yields error code `20` (`Transaction numbers are only allowed on a replica set member or mongos`). The service detects this and fails safe with status `503 Service Unavailable` (`TRANSACTIONS_UNAVAILABLE`), preventing partial or uncoordinated writes.
+
+---
+
+## Administrative Operational Analytics Aggregation Design
+
+To support administrative summary reporting (`GET /api/v1/admin/analytics/summary`) without loading full documents into application memory, the system uses targeted MongoDB aggregation pipelines:
+
+1. **Resource Distribution:** `$group` on `category` with `$sum: 1`, combined with indexed status counts via `countDocuments({ status })`.
+2. **Booking Lifecycle Breakdown:** Uses a `$facet` pipeline on `Bookings` with `$match` conditions:
+   - `confirmedUpcoming`: `{ status: 'confirmed', startAt: { $gt: now } }`
+   - `confirmedActive`: `{ status: 'confirmed', startAt: { $lte: now }, endAt: { $gt: now } }`
+   - `completed`: `{ status: 'completed' }`
+   - `cancelled`: `{ status: 'cancelled' }`
+   - `byStatus`: `$group` by status with count.
+3. **Maintenance Breakdown:** `$facet` pipeline on `MaintenanceBlocks`:
+   - `inEffectNow`: `{ startAt: { $lte: now }, endAt: { $gt: now } }`
+   - `upcoming`: `{ startAt: { $gt: now } }`
+   - `past`: `{ endAt: { $lte: now } }`
+4. **User Distribution:** Grouped by `role` and counts by account `status` (`active`, `disabled`).
+
+All aggregation facets run concurrently via `Promise.all()` to achieve minimal latency and zero memory overhead.
 

@@ -63,6 +63,19 @@ export function errorHandler(err, req, res, next) {
     details = err.keyValue || null;
   }
 
+  // 6. JWT token parsing and validation errors
+  if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    message = 'Authentication session has expired. Please sign in again.';
+    code = 'TOKEN_EXPIRED';
+    details = null;
+  } else if (err.name === 'JsonWebTokenError') {
+    statusCode = 401;
+    message = 'Invalid authentication token.';
+    code = 'TOKEN_INVALID';
+    details = null;
+  }
+
   // Log 500 errors to the console in development/server logs (without sensitive tokens)
   if (statusCode >= 500) {
     console.error(`[Server Error] ${req.method} ${req.originalUrl}:`, err);

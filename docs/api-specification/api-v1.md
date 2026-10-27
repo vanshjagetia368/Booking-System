@@ -1374,9 +1374,104 @@ Deletes a maintenance blackout period.
 
 ---
 
-## Planned API Groups (Upcoming Prompts)
+#### 6. Administrative Analytics & Operational Summary (Prompt 12)
 
-| Group | Namespace | Responsibilities | Target Prompt | Access |
+`GET /api/v1/admin/analytics/summary`
+
+Retrieves an operational summary and key aggregate metrics across resources, bookings, maintenance blocks, and users for the administrative dashboard.
+
+- **Access:** Administrator (`authenticate` + `requireRole('admin')`)
+- **Query Parameters:** None.
+- **Computation Performance:** Computed using MongoDB `$facet` aggregation pipelines and `countDocuments()` for constant memory usage and zero full-document memory loading.
+- **Success Status:** `200 OK`
+
+##### Response Fields Specification
+- `summary.generatedAt`: UTC ISO 8601 timestamp representing the calculation instant.
+- `summary.resources`:
+  - `total`: Total count of resources.
+  - `active`: Count of active resources available for booking.
+  - `inactive`: Count of deactivated resources.
+  - `byCategory`: Map of counts grouped by category (`study-room`, `meeting-room`, `lab-equipment`, `other`).
+- `summary.bookings`:
+  - `total`: Total historical and current bookings count.
+  - `confirmedUpcoming`: Confirmed bookings scheduled in the future (`startAt > now`).
+  - `confirmedActive`: Confirmed bookings currently in progress (`startAt <= now < endAt`).
+  - `completed`: Completed bookings (`status: 'completed'`).
+  - `cancelled`: Cancelled bookings (`status: 'cancelled'`).
+  - `byStatus`: Map of counts grouped by status (`confirmed`, `cancelled`, `completed`).
+- `summary.maintenance`:
+  - `total`: Total maintenance blackout blocks recorded.
+  - `inEffectNow`: Maintenance blocks currently in effect (`startAt <= now < endAt`).
+  - `upcoming`: Maintenance blocks scheduled for the future (`startAt > now`).
+  - `past`: Expired maintenance blocks (`endAt <= now`).
+- `summary.users`:
+  - `total`: Total registered accounts.
+  - `active`: Active accounts.
+  - `disabled`: Disabled accounts.
+  - `byRole`: Map of counts grouped by role (`user`, `admin`).
+
+##### Example 200 OK Response
+```json
+{
+  "success": true,
+  "message": "Administrative operational analytics retrieved successfully.",
+  "data": {
+    "summary": {
+      "generatedAt": "2026-10-27T18:00:00.000Z",
+      "resources": {
+        "total": 12,
+        "active": 10,
+        "inactive": 2,
+        "byCategory": {
+          "study-room": 5,
+          "meeting-room": 4,
+          "lab-equipment": 2,
+          "other": 1
+        }
+      },
+      "bookings": {
+        "total": 154,
+        "confirmedUpcoming": 38,
+        "confirmedActive": 4,
+        "completed": 98,
+        "cancelled": 14,
+        "byStatus": {
+          "confirmed": 42,
+          "cancelled": 14,
+          "completed": 98
+        }
+      },
+      "maintenance": {
+        "total": 6,
+        "inEffectNow": 1,
+        "upcoming": 2,
+        "past": 3
+      },
+      "users": {
+        "total": 85,
+        "active": 83,
+        "disabled": 2,
+        "byRole": {
+          "user": 81,
+          "admin": 4
+        }
+      }
+    }
+  }
+}
+```
+
+##### Error Responses
+- `401 Unauthorized` (`AUTHENTICATION_REQUIRED`): Request lacks a valid JWT session or header.
+- `403 Forbidden` (`FORBIDDEN_INSUFFICIENT_PERMISSIONS`): Authenticated user does not possess the `admin` role.
+
+---
+
+## Backend API Implementation Status
+
+All backend endpoints planned in Prompts 1–12 are fully implemented, verified, and operational:
+
+| Group | Namespace | Responsibilities | Status | Access |
 |---|---|---|---|---|
 | Health | `/api/v1/health` | Service liveness & database readiness | **Implemented (Prompt 3)** | Public |
 | Authentication | `/api/v1/auth` | Registration, sign-in, session profile, sign-out | **Implemented (Prompt 5)** | Public (sign-in/reg) / Authenticated (profile) |
@@ -1386,6 +1481,7 @@ Deletes a maintenance blackout period.
 | Booking Creation | `/api/v1/bookings` | Authenticated reservation creation with atomic slot allocation | **Implemented (Prompt 9)** | Authenticated (ownership enforced) |
 | Booking Lifecycle | `/api/v1/bookings` | User booking history, detail inspection, cancellation, reschedule | **Implemented (Prompt 10)** | Authenticated (ownership enforced) |
 | Administration | `/api/v1/admin/bookings`, `/api/v1/admin/resources/:id/maintenance`, `/api/v1/admin/maintenance/:id` | Admin booking list/cancellation & maintenance block management | **Implemented (Prompt 11)** | Administrator |
+| Admin Analytics | `/api/v1/admin/analytics/summary` | High-level operational overview & aggregate metrics | **Implemented (Prompt 12)** | Administrator |
 
 ---
 
